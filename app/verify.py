@@ -1,19 +1,13 @@
 from __future__ import annotations
 
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
 from app.brand import brand_name, bot_username
-from app.config import PUBLIC_BASE_URL, WEBHOOK_BASE_URL
 from app.models import Identity
 
 
 def _bot(name: str = "") -> str:
     return (name or bot_username()).lstrip("@")
-
-
-def _mini() -> str:
-    base = (PUBLIC_BASE_URL or WEBHOOK_BASE_URL or "").rstrip("/")
-    return f"{base}/mini" if base.startswith("https://") else ""
 
 
 def card_text(ident: Identity, *, watermark: bool = False, bot_username: str = "") -> str:
@@ -80,17 +74,13 @@ def alert_text(ident: Identity) -> str:
 
 def card_kb(ident: Identity, *, share_url: str = "", bot_username: str = "") -> InlineKeyboardMarkup:
     bot = _bot(bot_username)
-    mini = _mini()
     rows: list[list[InlineKeyboardButton]] = []
     row: list[InlineKeyboardButton] = []
     if ident.username:
         row.append(InlineKeyboardButton("联系登记账号", url=f"https://t.me/{ident.username.lstrip('@')}"))
     row.append(InlineKeyboardButton("继续查询", switch_inline_query_current_chat=""))
     rows.append(row)
-    if mini:
-        rows.append([InlineKeyboardButton("开通官方核验", web_app=WebAppInfo(url=mini))])
-    else:
-        rows.append([InlineKeyboardButton("开通官方核验", url=f"https://t.me/{bot}?start=pay")])
+    rows.append([InlineKeyboardButton("开通官方核验", url=f"https://t.me/{bot}?start=pay")])
     return InlineKeyboardMarkup(rows)
 
 
