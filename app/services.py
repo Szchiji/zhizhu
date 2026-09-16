@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import re
 import secrets
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -20,6 +21,7 @@ SKIP_NAMES = {
     "start",
     "join",
 }
+JST = ZoneInfo("Asia/Tokyo")
 
 
 def is_staff(tg_id: int | None) -> bool:
@@ -81,7 +83,9 @@ def parse_username(text: str) -> str:
 def fmt_until(dt) -> str:
     if not dt:
         return ""
-    return dt.strftime("%Y-%m-%d %H:%M")
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(JST).strftime("%Y-%m-%d %H:%M")
 
 
 def find_paid_by_tg_id(db: Session, tg_id: int) -> Identity | None:
@@ -118,7 +122,7 @@ def save_paid_profile(db: Session, tenant: Tenant, user) -> Identity:
     if user:
         uname = getattr(user, "username", None)
         if uname:
-            ident.username = str(uname).lstrip("@")
+            ident.username = str(uname).lstrip("@")[:32]
         uid = getattr(user, "id", None)
         if uid:
             try:
@@ -127,7 +131,7 @@ def save_paid_profile(db: Session, tenant: Tenant, user) -> Identity:
                 pass
         name = getattr(user, "full_name", None) or ""
         if name and not ident.display_name:
-            ident.display_name = str(name)[:64]
+            ident.display_name = str(name).strip()[:64]
     db.commit()
     db.refresh(ident)
     return ident
