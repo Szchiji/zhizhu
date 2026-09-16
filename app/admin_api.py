@@ -6,6 +6,7 @@ from fastapi import HTTPException, Request
 from fastapi.responses import JSONResponse
 from sqlalchemy import or_, select
 
+from app.access import normalize_channel
 from app.config import ADMIN_TG_IDS, USDT_ADDRESS
 from app.db import get_session
 from app.models import Identity, Order, Tenant, utcnow
@@ -106,6 +107,8 @@ def mount_admin(app) -> None:
                 "remind_enabled": get_setting(db, "remind_enabled", "1"),
                 "remind_days": get_setting(db, "remind_days", "7"),
                 "remind_text": get_setting(db, "remind_text", ""),
+                "force_channel": get_setting(db, "force_channel", ""),
+                "force_channel_on": get_setting(db, "force_channel_on", "0"),
             }
         finally:
             db.close()
@@ -176,6 +179,17 @@ def mount_admin(app) -> None:
                 set_setting(db, "remind_enabled", enabled)
                 set_setting(db, "remind_text", str(body.get("text") or "")[:300])
                 return {"ok": True, "remind_days": n, "remind_enabled": enabled}
+            if action == "channel":
+                raw = normalize_channel(str(body.get("channel") or ""))
+                set_setting(db, "force_channel", raw)
+                if "enabled" in body:
+                    on = "1" if str(body.get("enabled")) in {"1", "true", "on"} else "0"
+                    set_setting(db, "force_channel_on", on)
+                return {"ok": True, "force_channel": raw, "force_channel_on": get_setting(db, "force_channel_on", "0")}
+            if action == "channel_toggle":
+                on = "0" if get_setting(db, "force_channel_on", "0") == "1" else "1"
+                set_setting(db, "force_channel_on", on)
+                return {"ok": True, "force_channel_on": on, "force_channel": get_setting(db, "force_channel", "")}
             if action == "clone":
                 set_clone(db, not clone_on(db))
                 return {"ok": True, "clone": clone_on(db)}
@@ -211,7 +225,10 @@ def mount_admin(app) -> None:
                 if tenant.status != "owner":
                     tenant.status = "active"
                     tenant.plan = "year" if days >= 360 else "custom"
-                    tenant.paid_until = utcnow() + timedelta(days=days)
+                    base = utcnow()
+                    if tenant.paid_until and tenant.paid_until > base:
+                        base = tenant.paid_until
+                    tenant.paid_until = base + timedelta(days=days)
                 db.commit()
                 return {"ok": True, "user": _dump_user(tenant), "days": days}
             if action in {"user_block", "user_unblock", "user_delete"}:
