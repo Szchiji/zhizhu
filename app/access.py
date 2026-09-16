@@ -22,26 +22,61 @@ def is_blocked(tenant) -> bool:
     return tenant.status == "suspended"
 
 
+def force_on(db) -> bool:
+    return get_setting(db, "force_channel_on", "0") == "1"
+
+
 def force_channel(db) -> str:
     return (get_setting(db, "force_channel", "") or "").strip()
 
 
+def normalize_channel(raw: str) -> str:
+    text = (raw or "").strip()
+    if not text:
+        return ""
+    if text.startswith("https://t.me/"):
+        part = text.split("t.me/", 1)[1].split("?")[0].strip("/")
+        if part.startswith("c/"):
+            num = part[2:].split("/")[0]
+            return f"-100{num}" if not num.startswith("100") else f"-{num}"
+        return "@" + part.lstrip("@")
+    if text.startswith("@"):
+        return text
+    digits = text.lstrip("-")
+    if digits.isdigit():
+        if text.startswith("-"):
+            return text
+        if text.startswith("100"):
+            return "-" + text
+        return "-100" + text
+    return "@" + text.lstrip("@")
+
+
+def channel_chat_id(channel: str):
+    raw = normalize_channel(channel)
+    if raw.lstrip("-").isdigit():
+        try:
+            return int(raw)
+        except ValueError:
+            return raw
+    return raw
+
+
 def channel_link(channel: str) -> str:
-    raw = (channel or "").strip()
+    raw = normalize_channel(channel)
     if raw.startswith("http"):
         return raw
-    name = raw.lstrip("@")
-    if name.startswith("-100"):
-        return f"https://t.me/c/{name[4:]}"
-    return f"https://t.me/{name}"
+    if raw.startswith("-100") and raw[1:].isdigit():
+        return f"https://t.me/c/{raw[4:]}"
+    if raw.startswith("-"):
+        return ""
+    return f"https://t.me/{raw.lstrip('@')}"
 
 
 async def joined_channel(user_id: int, channel: str) -> bool:
     if not channel or not _bot:
         return True
-    chat = channel if channel.startswith("@") or channel.startswith("-") else f"@{channel.lstrip('@')}"
-    if chat.startswith("http"):
-        return True
+    chat = channel_chat_id(channel)
     try:
         member = await _bot.get_chat_member(chat, user_id)
         return member.status in {"creator", "administrator", "member", "restricted"}
@@ -59,10 +94,11 @@ async def gate_user(user_id: int) -> tuple[str | None, str]:
         tenant = get_or_create_tenant(db, user_id)
         if is_blocked(tenant):
             return "账号已被停用，无法使用本机器人。", ""
+        on = force_on(db)
         channel = force_channel(db)
     finally:
         db.close()
-    if channel and not await joined_channel(user_id, channel):
+    if on and channel and not await joined_channel(user_id, channel):
         return f"请先订阅频道 {channel} 后再使用。", channel_link(channel)
     return None, ""
 
