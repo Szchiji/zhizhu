@@ -34,6 +34,7 @@ from app.services import (
     activate_order,
     add_event,
     find_paid_identity,
+    resolve_paid_identity,
     fmt_until,
     get_or_create_tenant,
     get_setting,
@@ -190,24 +191,43 @@ async def mini_me(user_id: int = 0, init_data: str = "", username: str = "", dis
 
 @app.get("/api/mini/lookup")
 async def mini_lookup(q: str = ""):
-    name = parse_username(q)
-    if not name:
+    raw = (q or "").strip()
+    name = parse_username(raw)
+    token = name or raw.lstrip("@")
+    if not token:
         return JSONResponse({"error": "请输入 @用户名"}, status_code=400)
     db = get_session()
     try:
-        ident = find_paid_identity(db, name)
-        if not ident:
-            return {"ok": True, "found": False, "query": name}
-        return {
-            "ok": True,
-            "found": True,
-            "query": name,
-            "card": card_text(ident),
-            "display_name": ident.display_name,
-            "username": ident.username,
-            "official_user_id": ident.official_user_id,
-            "note": ident.card_text,
-        }
+        matches = []
+        rows = list(
+            db.scalars(
+                select(Identity).where(
+                    (Identity.username.ilike(f"%{token}%")) | (Identity.display_name.ilike(f"%{token}%"))
+                ).limit(15)
+            )
+        )
+        for ident in rows:
+            tenant = db.get(Tenant, ident.tenant_id)
+            if tenant and tenant_usable(tenant) and ident.username:
+                matches.append({
+                    "username": ident.username,
+                    "display_name": ident.display_name or "",
+                    "official_user_id": ident.official_user_id,
+                })
+        ident = await resolve_paid_identity(db, name or token, platform_app.bot if platform_app else None)
+        if ident:
+            return {
+                "ok": True,
+                "found": True,
+                "query": ident.username or token,
+                "card": card_text(ident),
+                "display_name": ident.display_name,
+                "username": ident.username,
+                "official_user_id": ident.official_user_id,
+                "note": ident.card_text,
+                "matches": matches,
+            }
+        return {"ok": True, "found": False, "query": token, "matches": matches}
     finally:
         db.close()
 
