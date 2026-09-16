@@ -5,40 +5,29 @@ from app.models import Tenant, utcnow
 from app.services import get_setting, is_staff, set_setting
 
 PLANS = {
-    "half": {"days": 15, "label": "半月"},
-    "quarter": {"days": 90, "label": "季度"},
     "year": {"days": 365, "label": "一年"},
-    "life": {"days": 36500, "label": "永久"},
 }
 
-DEFAULT_STARS = {
-    "half": max(1, STARS_MONTHLY // 2 or 200),
-    "quarter": max(1, STARS_MONTHLY * 2),
-    "year": max(1, STARS_MONTHLY * 8),
-    "life": max(1, STARS_MONTHLY * 20),
-}
-DEFAULT_USDT = {
-    "half": max(0.01, round(USDT_YEARLY / 6, 2)),
-    "quarter": max(0.01, round(USDT_YEARLY / 3, 2)),
-    "year": USDT_YEARLY,
-    "life": max(0.01, round(USDT_YEARLY * 3, 2)),
-}
+DEFAULT_STARS = {"year": max(1, STARS_MONTHLY * 8)}
+DEFAULT_USDT = {"year": USDT_YEARLY}
 
 
 def plan_stars(db, key: str) -> int:
-    raw = get_setting(db, f"stars_{key}", str(DEFAULT_STARS[key]))
+    key = key if key in PLANS else "year"
+    raw = get_setting(db, f"stars_{key}", str(DEFAULT_STARS.get(key, DEFAULT_STARS["year"])))
     try:
         return max(1, int(float(raw)))
     except ValueError:
-        return DEFAULT_STARS[key]
+        return DEFAULT_STARS["year"]
 
 
 def plan_usdt(db, key: str) -> float:
-    raw = get_setting(db, f"usdt_{key}", str(DEFAULT_USDT[key]))
+    key = key if key in PLANS else "year"
+    raw = get_setting(db, f"usdt_{key}", str(DEFAULT_USDT.get(key, DEFAULT_USDT["year"])))
     try:
         return max(0.01, float(raw))
     except ValueError:
-        return DEFAULT_USDT[key]
+        return DEFAULT_USDT["year"]
 
 
 def clone_on(db) -> bool:
@@ -60,8 +49,6 @@ def is_paid(tenant: Tenant) -> bool:
 def price_board(db) -> str:
     lines = ["套餐价格"]
     for key, meta in PLANS.items():
-        lines.append(
-            f"{meta['label']}：{plan_stars(db, key)}⭐ 或 {plan_usdt(db, key):g} USDT"
-        )
+        lines.append(f"{meta['label']}：{plan_stars(db, key)}⭐ 或 {plan_usdt(db, key):g} USDT")
     lines.append(f"克隆功能：{'已开启' if clone_on(db) else '已关闭'}")
     return "\n".join(lines)
