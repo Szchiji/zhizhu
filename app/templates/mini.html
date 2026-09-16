@@ -115,6 +115,13 @@
         <div class="btns"><button class="ghost" onclick="setAddr()">保存地址</button><button class="ghost" onclick="toggleClone()" id="aclone">克隆</button></div>
       </div>
       <div class="card">
+        <h1>续费提醒</h1>
+        <p class="sub">到期前私信提醒。文案可用 {until} 和 {days}</p>
+        <label>提前天数</label><input id="rdays" type="number" value="7" min="0" max="90" />
+        <label>提醒文案</label><textarea id="rtext" placeholder="你的官方核验将于 {until} 到期"></textarea>
+        <div class="btns"><button class="ghost" onclick="saveRemind()">保存提醒</button><button class="ghost" id="renable" onclick="toggleRemind()">提醒：开</button></div>
+      </div>
+      <div class="card">
         <h1>强制订阅</h1>
         <p class="sub">填 @频道名 或 -100 频道ID。机器人需是频道管理员。</p>
         <label>频道</label><input id="achannel" placeholder="@channel 或 -100xxxxxxxxxx" />
@@ -185,10 +192,25 @@
           document.getElementById('ochain').textContent=(j.chain||'TRC20').toUpperCase();
           document.getElementById('oaddr').textContent=j.address;
           window._addr=j.address;
-          show(ok,'请复制地址按金额转账');
+          show(ok,'请复制地址按金额转账，到账后自动刷新');
           btn.disabled=false;
+          watchPaid();
         }
       }catch(e){ show(err,e.message); btn.disabled=false; }
+    }
+    async function watchPaid(){
+      for(let i=0;i<48;i++){
+        await new Promise(r=>setTimeout(r,5000));
+        try{
+          const j=await fetch('/api/mini/me?user_id='+user.id+'&init_data='+encodeURIComponent(initData)+'&username='+encodeURIComponent(user.username||'')+'&display_name='+encodeURIComponent(user.first_name||'')).then(r=>r.json());
+          if(j.paid){
+            document.getElementById('checkout').classList.add('hidden');
+            show(ok,'已开通，登记已生效');
+            loadMe(); loadOrders(); tab('me');
+            return;
+          }
+        }catch(e){}
+      }
     }
     function copyAddr(){ if(window._addr) navigator.clipboard.writeText(window._addr).then(()=>show(ok,'地址已复制')); }
     async function cancelPay(){
@@ -211,7 +233,7 @@
     async function loadMe(){
       if(!user) return;
       try{
-        const j=await fetch('/api/mini/me?user_id='+user.id+'&init_data='+encodeURIComponent(initData)).then(r=>r.json());
+        const j=await fetch('/api/mini/me?user_id='+user.id+'&init_data='+encodeURIComponent(initData)+'&username='+encodeURIComponent(user.username||'')+'&display_name='+encodeURIComponent((user.first_name||'')+(user.last_name?(' '+user.last_name):''))).then(r=>r.json());
         document.getElementById('status').textContent=j.paid?'已开通':'未开通';
         document.getElementById('plan').textContent=j.plan_label||'—';
         document.getElementById('until').textContent=j.paid_until||'—';
@@ -259,6 +281,10 @@
         document.getElementById('ausdt').value=j.usdt||'';
         document.getElementById('aaddr').value=j.address||'';
         document.getElementById('aclone').textContent=j.clone?'克隆：开':'克隆：关';
+        document.getElementById('rdays').value=j.remind_days||7;
+        document.getElementById('rtext').value=j.remind_text||'';
+        window._remind=j.remind_enabled!=='0';
+        document.getElementById('renable').textContent=window._remind?'提醒：开':'提醒：关';
         document.getElementById('achannel').value=j.force_channel||'';
         window._ch=j.force_channel_on==='1';
         document.getElementById('achon').textContent=window._ch?'强制订阅：开':'强制订阅：关';
@@ -274,6 +300,17 @@
     async function setAddr(){
       try{ await api('/api/mini/admin',{action:'addr',address:document.getElementById('aaddr').value}); show(ok,'地址已更新'); }
       catch(e){ show(err,e.message); }
+    }
+    async function saveRemind(){
+      try{
+        await api('/api/mini/admin',{action:'remind',days:document.getElementById('rdays').value,text:document.getElementById('rtext').value,enabled:window._remind?'1':'0'});
+        show(ok,'提醒设置已保存');
+      }catch(e){ show(err,e.message); }
+    }
+    async function toggleRemind(){
+      window._remind=!window._remind;
+      document.getElementById('renable').textContent=window._remind?'提醒：开':'提醒：关';
+      await saveRemind();
     }
     async function saveChannel(){
       try{
@@ -299,7 +336,7 @@
       catch(e){ show(err,e.message); }
     }
     async function save(){
-      try{ await api('/api/mini/profile', {display_name:document.getElementById('display').value, card_text:document.getElementById('card').value}); show(ok,'资料已保存'); loadMe(); }
+      try{ await api('/api/mini/profile', {display_name:document.getElementById('display').value, card_text:document.getElementById('card').value, username:user&&user.username}); show(ok,'资料已保存'); loadMe(); }
       catch(e){ show(err,e.message); }
     }
     loadMe();
