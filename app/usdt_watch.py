@@ -19,10 +19,19 @@ from app.services import activate_order, add_event, get_setting, save_paid_profi
 log = logging.getLogger("zhizhu.usdt")
 USDT_CONTRACT = "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t"
 TRONGRID = "https://api.trongrid.io/v1/accounts/{addr}/transactions/trc20"
+DEFAULT_REMIND = "你的官方核验将于 {until} 到期，请及时续费。"
 
 
 def _api_key() -> str:
     return os.getenv("TRONGRID_API_KEY", "")
+
+
+def _remind_days(db) -> int:
+    raw = get_setting(db, "remind_days", "7")
+    try:
+        return max(0, min(int(float(raw)), 90))
+    except (TypeError, ValueError):
+        return 7
 
 
 async def _incoming(address: str) -> list[dict]:
@@ -60,27 +69,32 @@ async def remind_expiring(bot) -> None:
         return
     db = get_session()
     try:
+        if get_setting(db, "remind_enabled", "1") != "1":
+            return
+        days = _remind_days(db)
         now = utcnow()
-        soon = now + timedelta(days=7)
+        soon = now + timedelta(days=days)
         rows = list(
             db.scalars(
                 select(Tenant).where(
                     Tenant.paid_until.is_not(None),
                     Tenant.paid_until > now,
                     Tenant.paid_until <= soon,
+                    Tenant.status != "suspended",
                 )
             )
         )
+        tmpl = get_setting(db, "remind_text", DEFAULT_REMIND) or DEFAULT_REMIND
         for tenant in rows:
-            key = f"remind:{tenant.id}:{tenant.paid_until.date()}"
+            key = f"remind:{days}:{tenant.id}:{tenant.paid_until.date()}"
             if get_setting(db, key):
                 continue
             set_setting(db, key, "1")
+            left = max(0, (tenant.paid_until - now).days)
+            until = tenant.paid_until.strftime("%Y-%m-%d %H:%M")
+            text = tmpl.replace("{until}", until).replace("{days}", str(left))
             try:
-                await bot.send_message(
-                    chat_id=tenant.owner_tg_id,
-                    text=f"你的官方核验将于 {tenant.paid_until} 到期，点左下角菜单续费。",
-                )
+                await bot.send_message(chat_id=tenant.owner_tg_id, text=text)
             except Exception as exc:
                 log.warning("remind failed %s", exc)
     finally:
