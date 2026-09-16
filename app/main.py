@@ -13,6 +13,7 @@ from sqlalchemy import select
 from telegram import Bot, MenuButtonWebApp, Update, WebAppInfo
 
 from app.config import (
+    ADMIN_TG_IDS,
     PLATFORM_BOT_TOKEN,
     PUBLIC_BASE_URL,
     USDT_ADDRESS,
@@ -29,19 +30,39 @@ from app.platform_bot import build_platform_app
 from app.services import (
     activate_order,
     add_event,
+    find_paid_identity,
     get_or_create_tenant,
     get_setting,
     new_code,
     open_order,
+    parse_username,
     tenant_usable,
 )
 from app.tenant_bot import handle_tenant_update
+from app.tg_webapp import user_id_from_init
 from app.usdt_watch import watch_loop
+from app.verify import card_text
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("zhizhu")
 templates = Jinja2Templates(directory="app/templates")
 platform_app = None
+
+
+def _uid(body: dict | None = None, user_id: int = 0, init_data: str = "") -> int:
+    if init_data:
+        n = user_id_from_init(init_data)
+        if n:
+            return n
+    if body:
+        n = user_id_from_init(str(body.get("init_data") or ""))
+        if n:
+            return n
+        try:
+            return int(body.get("user_id") or 0)
+        except (TypeError, ValueError):
+            return 0
+    return int(user_id or 0)
 
 
 def _drop_open_orders(db, tenant_id: int) -> None:
@@ -123,25 +144,79 @@ async def mini(request: Request):
 
 
 @app.get("/api/mini/me")
-async def mini_me(user_id: int = 0):
-    if not user_id:
+async def mini_me(user_id: int = 0, init_data: str = ""):
+    uid = _uid(user_id=user_id, init_data=init_data)
+    if not uid:
         return JSONResponse({"error": "未登录"}, status_code=401)
     db = get_session()
     try:
-        tenant = get_or_create_tenant(db, user_id)
+        tenant = get_or_create_tenant(db, uid)
         ident = tenant.identity
         paid = tenant_usable(tenant)
         until = tenant.paid_until.strftime("%Y-%m-%d %H:%M") if tenant.paid_until else ("管理员" if paid else "")
         return {
             "ok": True,
             "paid": paid,
+            "is_admin": uid in ADMIN_TG_IDS,
             "plan": tenant.plan,
             "plan_label": PLANS.get(tenant.plan, {}).get("label", tenant.plan or "—"),
             "paid_until": until or "—",
             "username": ident.username if ident else "",
             "display_name": ident.display_name if ident else "",
             "card_text": ident.card_text if ident else "",
+            "official_user_id": ident.official_user_id if ident else None,
         }
+    finally:
+        db.close()
+
+
+@app.get("/api/mini/lookup")
+async def mini_lookup(q: str = ""):
+    name = parse_username(q)
+    if not name:
+        return JSONResponse({"error": "请输入 @用户名"}, status_code=400)
+    db = get_session()
+    try:
+        ident = find_paid_identity(db, name)
+        if not ident:
+            return {"ok": True, "found": False, "query": name}
+        return {
+            "ok": True,
+            "found": True,
+            "query": name,
+            "card": card_text(ident),
+            "display_name": ident.display_name,
+            "username": ident.username,
+            "official_user_id": ident.official_user_id,
+            "note": ident.card_text,
+        }
+    finally:
+        db.close()
+
+
+@app.get("/api/mini/orders")
+async def mini_orders(user_id: int = 0, init_data: str = ""):
+    uid = _uid(user_id=user_id, init_data=init_data)
+    if not uid:
+        return JSONResponse({"error": "未登录"}, status_code=401)
+    db = get_session()
+    try:
+        tenant = get_or_create_tenant(db, uid)
+        rows = db.scalars(select(Order).where(Order.tenant_id == tenant.id).order_by(Order.id.desc()).limit(20))
+        out = []
+        for o in rows:
+            out.append(
+                {
+                    "code": o.public_code,
+                    "rail": o.rail,
+                    "plan": o.plan,
+                    "amount": f"{float(o.amount):g}",
+                    "status": o.status,
+                    "txid": o.txid or "",
+                    "created": o.created_at.strftime("%m-%d %H:%M") if o.created_at else "",
+                }
+            )
+        return {"ok": True, "orders": out}
     finally:
         db.close()
 
@@ -149,15 +224,12 @@ async def mini_me(user_id: int = 0):
 @app.post("/api/mini/profile")
 async def mini_profile(request: Request):
     body = await request.json()
-    try:
-        user_id = int(body.get("user_id") or 0)
-    except (TypeError, ValueError):
-        user_id = 0
-    if not user_id:
+    uid = _uid(body)
+    if not uid:
         return JSONResponse({"error": "未登录"}, status_code=401)
     db = get_session()
     try:
-        tenant = get_or_create_tenant(db, user_id)
+        tenant = get_or_create_tenant(db, uid)
         if not tenant_usable(tenant):
             return JSONResponse({"error": "开通后才能修改资料"}, status_code=403)
         ident = tenant.identity or Identity(tenant_id=tenant.id)
@@ -175,21 +247,18 @@ async def mini_profile(request: Request):
 @app.post("/api/mini/order")
 async def mini_order(request: Request):
     body = await request.json()
-    try:
-        user_id = int(body.get("user_id") or 0)
-    except (TypeError, ValueError):
-        user_id = 0
+    uid = _uid(body)
     key = str(body.get("plan") or "year")
     rail = str(body.get("rail") or "stars")
     if key not in PLANS:
         key = "year"
-    if not user_id:
+    if not uid:
         raise HTTPException(400, detail="bad user")
     if not PLATFORM_BOT_TOKEN:
         raise HTTPException(503, detail="bot not ready")
     db = get_session()
     try:
-        tenant = get_or_create_tenant(db, user_id)
+        tenant = get_or_create_tenant(db, uid)
         _drop_open_orders(db, tenant.id)
         if rail == "usdt":
             addr = get_setting(db, "usdt_address", USDT_ADDRESS)
@@ -213,7 +282,15 @@ async def mini_order(request: Request):
                 )
             )
             db.commit()
-            return {"ok": True, "code": code, "amount": f"{amount:g}", "address": addr, "chain": USDT_CHAIN}
+            qr = f"https://api.qrserver.com/v1/create-qr-code/?size=200x200&data={addr}"
+            return {
+                "ok": True,
+                "code": code,
+                "amount": f"{amount:g}",
+                "address": addr,
+                "chain": USDT_CHAIN,
+                "qr": qr,
+            }
         price = plan_stars(db, key)
         payload = f"stars:{key}:{tenant.id}:{new_code()}"
         db.add(
