@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+from datetime import timedelta
 from types import SimpleNamespace
 
 import httpx
@@ -10,9 +11,9 @@ from sqlalchemy import select
 
 from app.config import USDT_ADDRESS, USDT_CHAIN
 from app.db import get_session
-from app.models import Order, utcnow
+from app.models import Order, Tenant, utcnow
 from app.plans import PLANS
-from app.services import activate_order, add_event, get_setting, save_paid_profile
+from app.services import activate_order, add_event, get_setting, save_paid_profile, set_setting
 
 log = logging.getLogger("zhizhu.usdt")
 USDT_CONTRACT = "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t"
@@ -51,6 +52,38 @@ async def _profile_from_bot(bot, tg_id: int):
         x for x in (getattr(chat, "first_name", None), getattr(chat, "last_name", None)) if x
     )
     return SimpleNamespace(id=tg_id, username=getattr(chat, "username", None), full_name=name)
+
+
+async def remind_expiring(bot) -> None:
+    if not bot:
+        return
+    db = get_session()
+    try:
+        now = utcnow()
+        soon = now + timedelta(days=7)
+        rows = list(
+            db.scalars(
+                select(Tenant).where(
+                    Tenant.paid_until.is_not(None),
+                    Tenant.paid_until > now,
+                    Tenant.paid_until <= soon,
+                )
+            )
+        )
+        for tenant in rows:
+            key = f"remind:{tenant.id}:{tenant.paid_until.date()}"
+            if get_setting(db, key):
+                continue
+            set_setting(db, key, "1")
+            try:
+                await bot.send_message(
+                    chat_id=tenant.owner_tg_id,
+                    text=f"你的官方核验将于 {tenant.paid_until} 到期，点左下角「开通套餐」续费。",
+                )
+            except Exception as exc:
+                log.warning("remind failed %s", exc)
+    finally:
+        db.close()
 
 
 async def check_once(bot=None) -> int:
@@ -121,8 +154,7 @@ async def check_once(bot=None) -> int:
                         text=(
                             f"已收到 {paid:g} USDT，{label}已开通至 {tenant.paid_until}\n\n"
                             f"已按你的 Telegram 账号生成登记\n"
-                            f"账号 {uname}\nID {tenant.owner_tg_id}\n\n"
-                            "需改名字或身份卡再发 /setname /setcard"
+                            f"账号 {uname}\nID {tenant.owner_tg_id}"
                         ),
                     )
                 except Exception as exc:
@@ -134,11 +166,15 @@ async def check_once(bot=None) -> int:
 
 async def watch_loop(bot) -> None:
     await asyncio.sleep(8)
+    ticks = 0
     while True:
         try:
             n = await check_once(bot)
             if n:
                 log.info("auto-activated %s usdt orders", n)
+            ticks += 1
+            if ticks % 24 == 1:
+                await remind_expiring(bot)
         except Exception:
             log.exception("usdt watch")
         await asyncio.sleep(25)
