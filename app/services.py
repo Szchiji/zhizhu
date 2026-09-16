@@ -21,7 +21,7 @@ SKIP_NAMES = {
     "start",
     "join",
 }
-JST = ZoneInfo("Asia/Tokyo")
+CST = ZoneInfo("Asia/Shanghai")
 
 
 def is_staff(tg_id: int | None) -> bool:
@@ -85,7 +85,7 @@ def fmt_until(dt) -> str:
         return ""
     if dt.tzinfo is None:
         dt = dt.replace(tzinfo=timezone.utc)
-    return dt.astimezone(JST).strftime("%Y-%m-%d %H:%M")
+    return dt.astimezone(CST).strftime("%Y-%m-%d %H:%M")
 
 
 def find_paid_by_tg_id(db: Session, tg_id: int) -> Identity | None:
