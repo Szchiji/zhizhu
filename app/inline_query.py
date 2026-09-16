@@ -3,6 +3,7 @@ from __future__ import annotations
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, InlineQueryResultArticle, InputTextMessageContent, Update
 from telegram.ext import ContextTypes
 
+from app.access import gate_user
 from app.config import BOT_USERNAME, BRAND_NAME
 from app.db import get_session
 from app.services import find_paid_identity, parse_username
@@ -11,6 +12,10 @@ from app.verify import card_kb, card_text, promo_text
 
 async def on_inline(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     q = update.inline_query
+    deny, _ = await gate_user(q.from_user.id if q.from_user else 0)
+    if deny:
+        await q.answer([], cache_time=0, is_personal=True)
+        return
     bot_name = context.bot.username or BOT_USERNAME
     name = parse_username(q.query or "")
     db = get_session()
