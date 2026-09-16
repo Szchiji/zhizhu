@@ -31,12 +31,7 @@ def get_or_create_tenant(db: Session, owner_tg_id: int) -> Tenant:
     if is_staff(owner_tg_id):
         tenant = Tenant(owner_tg_id=owner_tg_id, status="owner", plan="owner")
     else:
-        tenant = Tenant(
-            owner_tg_id=owner_tg_id,
-            status="trial",
-            plan=PLAN_DEFAULT,
-            trial_ends_at=utcnow() + timedelta(days=TRIAL_DAYS),
-        )
+        tenant = Tenant(owner_tg_id=owner_tg_id, status="unpaid", plan=PLAN_DEFAULT)
     db.add(tenant)
     db.flush()
     db.add(Identity(tenant_id=tenant.id, alert_text="这是公示的官方账号，只认这一个号"))
@@ -51,11 +46,7 @@ def tenant_usable(tenant: Tenant, at: datetime | None = None) -> bool:
         return False
     if tenant.status == "owner" or is_staff(tenant.owner_tg_id):
         return True
-    if tenant.trial_ends_at and at < tenant.trial_ends_at:
-        return True
-    if tenant.paid_until and at < tenant.paid_until:
-        return True
-    return False
+    return bool(tenant.paid_until and tenant.paid_until > at)
 
 
 def open_order(db: Session, tenant_id: int) -> Order | None:
@@ -75,31 +66,6 @@ def get_setting(db: Session, key: str, default: str = "") -> str:
     return row.value if row and row.value != "" else default
 
 
-def watch_key(viewer_tg_id: int) -> str:
-    return f"watch:{viewer_tg_id}"
-
-
-def set_watch(db: Session, viewer_tg_id: int, tenant_id: int) -> None:
-    set_setting(db, watch_key(viewer_tg_id), str(tenant_id))
-
-
-def get_watch_tenant(db: Session, viewer_tg_id: int) -> Tenant | None:
-    raw = get_setting(db, watch_key(viewer_tg_id), "")
-    if not raw.isdigit():
-        return None
-    return db.get(Tenant, int(raw))
-
-
-def find_tenant_by_username(db: Session, username: str) -> Tenant | None:
-    name = username.lstrip("@").strip()
-    if not name:
-        return None
-    ident = db.scalar(select(Identity).where(Identity.username.ilike(name)))
-    if ident:
-        return db.get(Tenant, ident.tenant_id)
-    return db.scalar(select(Tenant).where(Tenant.bot_username.ilike(name)))
-
-
 def set_setting(db: Session, key: str, value: str) -> None:
     row = db.get(Setting, key)
     if row:
@@ -108,24 +74,6 @@ def set_setting(db: Session, key: str, value: str) -> None:
     else:
         db.add(Setting(key=key, value=value, updated_at=utcnow()))
     db.commit()
-
-
-def stars_price(db: Session) -> int:
-    raw = get_setting(db, "stars_monthly", str(STARS_MONTHLY))
-    try:
-        n = int(float(raw))
-    except ValueError:
-        n = STARS_MONTHLY
-    return max(1, n)
-
-
-def usdt_price(db: Session) -> float:
-    raw = get_setting(db, "usdt_yearly", str(USDT_YEARLY))
-    try:
-        n = float(raw)
-    except ValueError:
-        n = USDT_YEARLY
-    return max(0.01, n)
 
 
 def add_event(db: Session, order: Order, dest: str, reason: str) -> None:
@@ -143,9 +91,8 @@ def add_event(db: Session, order: Order, dest: str, reason: str) -> None:
 def activate_order(db: Session, order: Order) -> Tenant:
     tenant = db.get(Tenant, order.tenant_id)
     base = utcnow()
-    for ts in (tenant.paid_until, tenant.trial_ends_at):
-        if ts and ts > base:
-            base = ts
+    if tenant.paid_until and tenant.paid_until > base:
+        base = tenant.paid_until
     period_end = base + timedelta(days=order.period_days)
     tenant.paid_until = period_end
     if tenant.status != "owner":
