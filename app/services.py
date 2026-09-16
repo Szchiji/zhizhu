@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.config import ADMIN_TG_IDS, PLAN_DEFAULT, STARS_MONTHLY, TRIAL_DAYS, USDT_YEARLY
+from app.config import ADMIN_TG_IDS, PLAN_DEFAULT, STARS_MONTHLY, USDT_YEARLY
 from app.models import Identity, Order, OrderEvent, Setting, Tenant, utcnow
 
 
@@ -74,6 +74,24 @@ def set_setting(db: Session, key: str, value: str) -> None:
     else:
         db.add(Setting(key=key, value=value, updated_at=utcnow()))
     db.commit()
+
+
+def stars_price(db: Session) -> int:
+    raw = get_setting(db, "stars_monthly", str(STARS_MONTHLY))
+    try:
+        n = int(float(raw))
+    except ValueError:
+        n = STARS_MONTHLY
+    return max(1, n)
+
+
+def usdt_price(db: Session) -> float:
+    raw = get_setting(db, "usdt_yearly", str(USDT_YEARLY))
+    try:
+        n = float(raw)
+    except ValueError:
+        n = USDT_YEARLY
+    return max(0.01, n)
 
 
 def add_event(db: Session, order: Order, dest: str, reason: str) -> None:
