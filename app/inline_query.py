@@ -4,7 +4,7 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup, InlineQueryResu
 from telegram.ext import ContextTypes
 
 from app.access import gate_user
-from app.config import BOT_USERNAME, BRAND_NAME
+from app.brand import brand_name, bot_username
 from app.db import get_session
 from app.services import find_paid_identity, parse_username
 from app.verify import card_kb, card_text, promo_text
@@ -16,7 +16,8 @@ async def on_inline(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if deny:
         await q.answer([], cache_time=0, is_personal=True)
         return
-    bot_name = context.bot.username or BOT_USERNAME
+    bot_name = (context.bot.username or bot_username()).lstrip("@")
+    brand = brand_name()
     name = parse_username(q.query or "")
     db = get_session()
     try:
@@ -29,12 +30,12 @@ async def on_inline(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         body = card_text(ident, bot_username=bot_name)
         markup = card_kb(ident, bot_username=bot_name)
     else:
-        title = f"查询 @{name}" if name else f"{BRAND_NAME}官方核验"
-        desc = f"点击发送核验卡，消息将带 {BRAND_NAME} 来源标识"
+        title = f"查询 @{name}" if name else f"{brand}·官方核验"
+        desc = f"点击发送，消息带 @{bot_name} 来源"
         body = promo_text(bot_name, name)
         markup = InlineKeyboardMarkup(
             [
-                [InlineKeyboardButton(f"打开{BRAND_NAME}查询", url=f"https://t.me/{bot_name}?start={'q_'+name if name else 'ask'}")],
+                [InlineKeyboardButton("打开工作台", url=f"https://t.me/{bot_name}?start={'q_'+name if name else 'ask'}")],
                 [InlineKeyboardButton("开通官方核验", url=f"https://t.me/{bot_name}?start=pay")],
             ]
         )
