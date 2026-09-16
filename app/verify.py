@@ -5,23 +5,33 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from app.models import Identity
 
 
+def promo_text(bot_username: str = "") -> str:
+    name = f"@{bot_username}" if bot_username else "平台机器人"
+    return (
+        f"官方身份核验平台 {name}\n\n"
+        "未开通套餐时，这里只展示平台引流。\n"
+        "充值半月 / 季度 / 一年 / 永久后，才能登记自己的官方身份、修改核验文案，并在输入框发卡。\n"
+        f"打开 {name} 选择套餐开通。"
+    )
+
+
 def card_text(ident: Identity, *, watermark: bool = True, bot_username: str = "") -> str:
     name = ident.display_name or "未设置"
     uname = f"@{ident.username}" if ident.username else "无用户名"
     uid = ident.official_user_id or "未设置"
     extra = ""
     if watermark:
-        if bot_username:
-            extra = f"\n\n核验请用 @{bot_username}，点链接或转发可疑私聊。"
-        else:
-            extra = "\n\nPowered by 核验平台"
-    return (
-        f"官方身份\n"
-        f"{name}（{uname}）\n"
-        f"User ID：{uid}\n"
-        f"只认这一个号，其他同名都不是本人。"
-        f"{extra}"
-    )
+        extra = f"\n\n核验请用 @{bot_username}，点链接或转发可疑私聊。" if bot_username else "\n\nPowered by 核验平台"
+    if ident.card_text:
+        body = ident.card_text
+    else:
+        body = (
+            f"官方身份\n"
+            f"{name}（{uname}）\n"
+            f"User ID：{uid}\n"
+            f"只认这一个号，其他同名都不是本人。"
+        )
+    return f"{body}{extra}"
 
 
 def alert_text(ident: Identity) -> str:
@@ -91,4 +101,4 @@ def judge(ident: Identity, src_id: int | None, src_name: str) -> str:
             f"来源：{src_name}\n来源 ID：{src_id}\n官方 ID：{official}\n"
             f"请不要转账，先打电话确认。"
         )
-    return "无法判断。对方需先在本机器人点「我的官方身份」登记 User ID。\n若对方关闭了转发来源，也核验不了。"
+    return "无法判断。对方需先充值并登记官方 User ID。\n若对方关闭了转发来源，也核验不了。"
