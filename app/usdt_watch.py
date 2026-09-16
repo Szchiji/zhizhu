@@ -9,6 +9,7 @@ from types import SimpleNamespace
 import httpx
 from sqlalchemy import select
 
+from app.brand import refresh_from_bot
 from app.config import USDT_ADDRESS, USDT_CHAIN
 from app.db import get_session
 from app.models import Order, Tenant, utcnow
@@ -78,7 +79,7 @@ async def remind_expiring(bot) -> None:
             try:
                 await bot.send_message(
                     chat_id=tenant.owner_tg_id,
-                    text=f"你的官方核验将于 {tenant.paid_until} 到期，点左下角「开通套餐」续费。",
+                    text=f"你的官方核验将于 {tenant.paid_until} 到期，点左下角菜单续费。",
                 )
             except Exception as exc:
                 log.warning("remind failed %s", exc)
@@ -153,7 +154,6 @@ async def check_once(bot=None) -> int:
                         chat_id=tenant.owner_tg_id,
                         text=(
                             f"已收到 {paid:g} USDT，{label}已开通至 {tenant.paid_until}\n\n"
-                            f"已按你的 Telegram 账号生成登记\n"
                             f"账号 {uname}\nID {tenant.owner_tg_id}"
                         ),
                     )
@@ -165,7 +165,11 @@ async def check_once(bot=None) -> int:
 
 
 async def watch_loop(bot) -> None:
-    await asyncio.sleep(8)
+    await asyncio.sleep(4)
+    try:
+        await refresh_from_bot(bot)
+    except Exception:
+        log.exception("brand refresh")
     ticks = 0
     while True:
         try:
