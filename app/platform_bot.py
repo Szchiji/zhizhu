@@ -23,6 +23,7 @@ from telegram.ext import (
     filters,
 )
 
+from app.brand import brand_name, brand_title, bot_username as brand_bot
 from app.config import ADMIN_TG_IDS, PUBLIC_BASE_URL, USDT_ADDRESS, USDT_CHAIN, WEBHOOK_BASE_URL, WEBHOOK_SECRET
 from app.crypto_token import encrypt_token
 from app.db import get_session
@@ -32,7 +33,9 @@ from app.plans import PLANS, clone_on, plan_stars, plan_usdt, price_board, set_c
 from app.services import (
     activate_order,
     add_event,
+    find_paid_by_tg_id,
     find_paid_identity,
+    fmt_until,
     get_or_create_tenant,
     get_setting,
     new_code,
@@ -56,7 +59,7 @@ def _pay_address(db) -> str:
 
 
 def _bot(context) -> str:
-    return context.bot.username or "zhizhusp_bot"
+    return (context.bot.username or brand_bot()).lstrip("@")
 
 
 def _mini() -> str:
@@ -114,11 +117,24 @@ def _kb_plan(db, key: str) -> InlineKeyboardMarkup:
     )
 
 
-async def _send_lookup(message, db, name: str, bot_name: str) -> None:
+async def _send_lookup(message, db, name: str, bot_name: str, bot=None) -> None:
     if not name:
         await message.reply_text("请发送对方用户名，例如 @username")
         return
     ident = find_paid_identity(db, name)
+    if not ident and bot:
+        try:
+            chat = await bot.get_chat("@" + name)
+            ident = find_paid_by_tg_id(db, chat.id)
+            if ident:
+                ident.username = getattr(chat, "username", None) or name
+                if not ident.official_user_id:
+                    ident.official_user_id = chat.id
+                if not ident.display_name:
+                    ident.display_name = getattr(chat, "full_name", None) or getattr(chat, "first_name", "") or ""
+                db.commit()
+        except Exception:
+            ident = None
     if not ident:
         await message.reply_text(f"查询结果\n\n@{name} 暂无官方登记。")
         return
@@ -157,19 +173,19 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         tenant = get_or_create_tenant(db, user.id)
         payload = (context.args[0] if context.args else "").strip()
         if payload.startswith("q") and parse_username(payload[1:]):
-            await _send_lookup(update.effective_message, db, parse_username(payload[1:]), _bot(context))
+            await _send_lookup(update.effective_message, db, parse_username(payload[1:]), _bot(context), bot=context.bot)
             return
         paid = tenant_usable(tenant)
         if paid:
             save_paid_profile(db, tenant, user)
             text = (
-                "蜘蛛 · 官方身份核验\n\n"
-                f"登记已开通至 {tenant.paid_until or '管理员'}\n"
+                f"{brand_name()} · {brand_title()}\n\n"
+                f"登记已开通至 {fmt_until(tenant.paid_until) or '管理员'}\n"
                 "点下方按钮查询、改资料或续费。"
             )
         else:
             text = (
-                "蜘蛛 · 官方身份核验\n\n"
+                f"{brand_name()} · {brand_title()}\n\n"
                 "查询：点「查询登记」，再发送对方 @用户名\n"
                 "开通：点「开通套餐」进小程序付费"
             )
@@ -188,8 +204,8 @@ async def cmd_status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
 
 async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.effective_message.reply_text(
-        "使用说明\n\n"
-        "1. 群里输入 @zhizhusp_bot 加用户名，发出带「通过 @蜘蛛」的官方卡\n"
+        f"使用说明\n\n"
+        f"1. 群里输入 @{_bot(context)} 加用户名，发出带「通过 @{_bot(context)}」的官方卡\n"
         "2. 开通：左下角「开通套餐」\n"
         "3. 开通后自动生成登记"
     )
@@ -334,7 +350,7 @@ async def _pay_stars(chat_id, message, context, tenant: Tenant, db, key: str) ->
     db.commit()
     await context.bot.send_invoice(
         chat_id=chat_id,
-        title=f"蜘蛛核验·{PLANS[key]['label']}",
+        title=f"{brand_name()}·{PLANS[key]['label']}",
         description="开通后可保存官方资料",
         payload=payload,
         provider_token="",
@@ -425,7 +441,7 @@ async def on_successful_payment(update: Update, context: ContextTypes.DEFAULT_TY
         tenant = activate_order(db, order)
         save_paid_profile(db, tenant, update.effective_user)
         await update.message.reply_text(
-            f"已开通{PLANS.get(order.plan, {}).get('label', '')}至 {tenant.paid_until}"
+            f"已开通{PLANS.get(order.plan, {}).get('label', '')}至 {fmt_until(tenant.paid_until)}"
         )
     finally:
         db.close()
@@ -480,7 +496,7 @@ async def _handle_admin_text(update, context, text: str) -> bool:
             tenant = activate_order(db, order)
             context.user_data.pop("wait", None)
             await update.effective_message.reply_text(
-                f"{order.public_code} 已开通至 {tenant.paid_until}", reply_markup=_kb_admin(db)
+                f"{order.public_code} 已开通至 {fmt_until(tenant.paid_until)}", reply_markup=_kb_admin(db)
             )
             return True
         return False
@@ -506,7 +522,7 @@ async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     context.user_data.pop("wait", None)
     db = get_session()
     try:
-        await _send_lookup(update.effective_message, db, name, _bot(context))
+        await _send_lookup(update.effective_message, db, name, _bot(context), bot=context.bot)
     finally:
         db.close()
 
