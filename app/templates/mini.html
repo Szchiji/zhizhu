@@ -2,108 +2,139 @@
 <html lang="zh">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1" />
-  <title>核验</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover" />
+  <title>官方核验</title>
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
   <style>
-    :root { --bg:#07111f; --card:rgba(18,32,54,.92); --line:rgba(255,255,255,.08); --text:#f4f7fb; --muted:#8ea0b5; --blue:#3b82f6; --green:#12b981; }
+    :root {
+      --bg:#07090d;
+      --card:#10141c;
+      --line:rgba(212,175,55,.14);
+      --text:#f3efe4;
+      --muted:#8b8373;
+      --gold:#d4af37;
+      --gold2:#f1d48a;
+    }
     * { box-sizing:border-box; }
-    body { margin:0; color:var(--text); font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; background:radial-gradient(1200px 500px at 10% -10%, #16345c 0%, transparent 55%), var(--bg); }
-    .wrap { padding:18px 16px 96px; }
-    .user { display:flex; gap:12px; align-items:center; margin-bottom:16px; }
-    .av { width:44px; height:44px; border-radius:14px; background:#1e3a5f; display:flex; align-items:center; justify-content:center; font-weight:700; overflow:hidden; }
-    .av img { width:44px; height:44px; object-fit:cover; }
-    .hello { font-size:13px; color:var(--muted); }
-    .name { font-size:18px; font-weight:700; }
-    .card { background:var(--card); border:1px solid var(--line); border-radius:20px; padding:16px; margin-bottom:12px; }
-    h1 { font-size:20px; margin:0 0 6px; }
-    .sub { color:var(--muted); font-size:13px; line-height:1.6; }
-    .price { font-size:28px; font-weight:800; margin:14px 0 4px; }
-    .unit { font-size:14px; color:var(--muted); font-weight:500; }
+    html,body { margin:0; background:var(--bg); color:var(--text); font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+    body { min-height:100vh; background:
+      radial-gradient(900px 420px at 80% -10%, rgba(212,175,55,.12), transparent 55%),
+      radial-gradient(700px 380px at -10% 110%, rgba(61,214,140,.06), transparent 50%),
+      var(--bg); }
+    .wrap { padding:18px 16px 108px; max-width:480px; margin:0 auto; }
+    .top { display:flex; align-items:center; gap:12px; margin-bottom:18px; }
+    .av { width:46px; height:46px; border-radius:16px; overflow:hidden; background:#1b2230; display:flex; align-items:center; justify-content:center; font-weight:700; border:1px solid var(--line); }
+    .av img { width:100%; height:100%; object-fit:cover; }
+    .hello { font-size:11px; letter-spacing:.18em; text-transform:uppercase; color:var(--gold); }
+    .name { font-size:18px; font-weight:650; margin-top:2px; }
+    .card { background:linear-gradient(180deg, rgba(255,255,255,.02), transparent 28%), var(--card); border:1px solid var(--line); border-radius:22px; padding:18px; margin-bottom:12px; }
+    .kicker { font-size:11px; letter-spacing:.16em; text-transform:uppercase; color:var(--gold); margin-bottom:8px; }
+    h1 { font-size:22px; margin:0 0 6px; font-weight:680; }
+    .sub { color:var(--muted); font-size:13px; line-height:1.65; }
+    .price { font-size:30px; font-weight:740; margin:14px 0 2px; letter-spacing:-.03em; }
+    .price span { font-size:14px; color:var(--muted); font-weight:500; }
     .btns { display:flex; gap:8px; margin-top:14px; }
-    button { flex:1; border:0; border-radius:14px; padding:12px 10px; font-size:14px; font-weight:700; color:#fff; background:var(--blue); }
-    .usdt { background:var(--green); }
-    .ghost { background:#1e3a5f; }
+    button { flex:1; border:0; border-radius:14px; padding:13px 10px; font-size:14px; font-weight:700; color:#1a1406; background:linear-gradient(180deg, var(--gold2), var(--gold)); }
+    button.ghost { background:#171c26; color:var(--text); border:1px solid var(--line); }
+    button.usdt { background:#143528; color:#d9ffe8; }
     button:disabled { opacity:.45; }
-    input, textarea { width:100%; border:1px solid var(--line); background:#0b1728; color:var(--text); border-radius:12px; padding:12px; font-size:15px; margin:8px 0 0; }
-    textarea { min-height:80px; }
+    input, textarea { width:100%; border:1px solid var(--line); background:#0b0e14; color:var(--text); border-radius:14px; padding:13px 12px; font-size:15px; margin-top:8px; }
+    textarea { min-height:88px; resize:vertical; }
     label { display:block; margin-top:12px; color:var(--muted); font-size:12px; }
-    .err,.ok { display:none; border-radius:12px; padding:10px 12px; font-size:13px; margin-bottom:12px; }
-    .err { background:#3f1d2a; color:#fecdd3; }
-    .ok { background:#113327; color:#bbf7d0; }
-    .mono { word-break:break-all; font-family:ui-monospace,monospace; background:#0b1728; padding:10px; border-radius:10px; }
-    .nav { position:fixed; left:12px; right:12px; bottom:12px; display:flex; gap:6px; background:#0c1a2e; border:1px solid var(--line); border-radius:18px; padding:6px; }
-    .nav button { background:transparent; color:var(--muted); font-size:13px; padding:10px 6px; }
-    .nav button.on { background:#163154; color:#fff; }
+    .err,.ok { display:none; border-radius:14px; padding:11px 12px; font-size:13px; margin-bottom:12px; }
+    .err { background:#2a1518; color:#ffc4c8; }
+    .ok { background:#10261c; color:#c6f6d8; }
+    .mono { word-break:break-all; font-family:ui-monospace,Menlo,monospace; background:#0b0e14; padding:12px; border-radius:12px; border:1px solid var(--line); font-size:13px; }
+    .nav { position:fixed; left:12px; right:12px; bottom:14px; display:flex; gap:6px; background:rgba(12,16,24,.92); backdrop-filter:blur(16px); border:1px solid var(--line); border-radius:20px; padding:6px; }
+    .nav button { background:transparent; color:var(--muted); font-size:12px; padding:11px 6px; }
+    .nav button.on { background:#1a2110; color:var(--gold2); }
     .hidden { display:none; }
-    .pill { display:inline-block; font-size:12px; padding:4px 8px; border-radius:999px; background:#163154; color:#cfe3ff; }
-    .row { display:flex; justify-content:space-between; gap:8px; margin:8px 0; font-size:14px; }
-    .idcard { white-space:pre-wrap; line-height:1.7; }
+    .pill { display:inline-flex; font-size:11px; letter-spacing:.08em; padding:5px 9px; border-radius:999px; background:#1a2110; color:var(--gold2); border:1px solid var(--line); }
+    .row { display:flex; justify-content:space-between; gap:8px; margin:10px 0; font-size:14px; }
+    .row span { color:var(--muted); }
+    .idcard { white-space:pre-wrap; line-height:1.75; font-size:14px; }
     .olist { font-size:13px; color:var(--muted); }
-    .olist div { padding:8px 0; border-bottom:1px solid var(--line); }
+    .olist div { padding:10px 0; border-bottom:1px solid var(--line); }
+    .stat { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:12px; }
+    .stat b { display:block; font-size:15px; margin-top:4px; }
   </style>
 </head>
 <body>
   <div class="wrap">
-    <div class="user">
+    <div class="top">
       <div class="av" id="av">?</div>
-      <div><div class="hello">电报账号登录</div><div class="name" id="uname">加载中…</div></div>
+      <div>
+        <div class="hello">Official Desk</div>
+        <div class="name" id="uname">加载中…</div>
+      </div>
     </div>
-    <div id="err" class="err"></div><div id="ok" class="ok"></div>
+    <div id="err" class="err"></div>
+    <div id="ok" class="ok"></div>
     <section id="tab-pay">
       <div class="card">
-        <div class="pill">年付套餐</div>
+        <div class="kicker">Membership</div>
         <h1>官方身份核验</h1>
-        <p class="sub">开通 365 天。请复制地址原额转账。</p>
-        <div class="price">{{ stars }}⭐ <span class="unit">或 {{ usdt }} USDT</span></div>
+        <p class="sub">开通后自动生成登记卡。查询、改资料、续费都在工作台完成。</p>
+        <div class="price">{{ stars }}⭐ <span>或 {{ usdt }} USDT / 年</span></div>
         <div class="btns">
-          <button onclick="pay(this,'stars')">Stars 支付</button>
-          <button class="usdt" onclick="pay(this,'usdt')">USDT 支付</button>
+          <button onclick="pay(this,'stars')">Stars</button>
+          <button class="usdt" onclick="pay(this,'usdt')">USDT</button>
         </div>
       </div>
       <div id="checkout" class="card hidden">
-        <h1>转账支付</h1>
-        <p class="sub">复制地址后原额转账，20 分钟内到账自动开通。</p>
+        <div class="kicker">Checkout</div>
+        <h1>待支付</h1>
+        <p class="sub">复制地址后原额转账，到账自动开通并写入资料。</p>
         <div class="row"><span>订单</span><b id="oid"></b></div>
         <div class="row"><span>金额</span><b id="oamt"></b></div>
         <div class="row"><span>网络</span><b id="ochain"></b></div>
         <div class="mono" id="oaddr"></div>
         <div class="btns">
           <button class="ghost" onclick="copyAddr()">复制地址</button>
-          <button class="ghost" onclick="cancelPay()">取消订单</button>
+          <button class="ghost" onclick="cancelPay()">取消</button>
         </div>
       </div>
     </section>
     <section id="tab-q" class="hidden">
       <div class="card">
+        <div class="kicker">Lookup</div>
         <h1>查询登记</h1>
         <input id="q" placeholder="@username" />
         <div class="btns"><button onclick="lookup()">查询</button></div>
       </div>
-      <div id="qcard" class="card hidden"><div class="pill">✅ 官方登记</div><div class="idcard" id="qtext"></div></div>
+      <div id="qcard" class="card hidden">
+        <div class="pill">Verified</div>
+        <div class="idcard" id="qtext"></div>
+      </div>
     </section>
     <section id="tab-me" class="hidden">
       <div class="card">
-        <h1>我的账户</h1>
-        <p class="sub" id="status">—</p>
-        <div class="row"><span class="sub">套餐</span><b id="plan">—</b></div>
-        <div class="row"><span class="sub">到期</span><b id="until">—</b></div>
+        <div class="kicker">Account</div>
+        <h1 id="status">—</h1>
+        <div class="stat">
+          <div class="sub">套餐<b id="plan">—</b></div>
+          <div class="sub">到期<b id="until">—</b></div>
+        </div>
       </div>
       <div class="card">
+        <div class="kicker">Profile</div>
         <h1>登记资料</h1>
+        <p class="sub">用户名与 ID 跟随电报账号自动写入，姓名和正文可修改。</p>
         <label>对外姓名</label><input id="display" />
         <label>身份卡正文</label><textarea id="card"></textarea>
-        <div class="btns"><button onclick="save()">保存</button></div>
+        <div class="btns"><button onclick="save()">保存并生效</button></div>
         <p class="sub" id="needpay"></p>
       </div>
       <div class="card">
+        <div class="kicker">Ledger</div>
         <h1>订单记录</h1>
         <div class="olist" id="olist">暂无</div>
       </div>
     </section>
     <section id="tab-adm" class="hidden">
       <div class="card">
-        <h1>管理</h1>
+        <div class="kicker">Admin</div>
+        <h1>经营设置</h1>
         <p class="sub" id="aboard"></p>
         <label>Stars 年付</label><input id="astars" type="number" />
         <label>USDT 年付</label><input id="ausdt" type="number" />
@@ -116,27 +147,31 @@
       </div>
       <div class="card">
         <h1>续费提醒</h1>
-        <p class="sub">到期前私信提醒。文案可用 {until} 和 {days}</p>
+        <p class="sub">到期前私信。文案可用 {until} {days}</p>
         <label>提前天数</label><input id="rdays" type="number" value="7" min="0" max="90" />
         <label>提醒文案</label><textarea id="rtext" placeholder="你的官方核验将于 {until} 到期"></textarea>
-        <div class="btns"><button class="ghost" onclick="saveRemind()">保存提醒</button><button class="ghost" id="renable" onclick="toggleRemind()">提醒：开</button></div>
+        <div class="btns"><button class="ghost" onclick="saveRemind()">保存</button><button class="ghost" id="renable" onclick="toggleRemind()">提醒：开</button></div>
       </div>
       <div class="card">
         <h1>强制订阅</h1>
-        <p class="sub">填 @频道名 或 -100 频道ID。机器人需是频道管理员。</p>
+        <p class="sub">@频道名 或 -100频道ID。机器人需是频道管理员。</p>
         <label>频道</label><input id="achannel" placeholder="@channel 或 -100xxxxxxxxxx" />
         <div class="btns"><button class="ghost" onclick="saveChannel()">保存频道</button><button class="ghost" id="achon" onclick="toggleChannel()">强制订阅：关</button></div>
       </div>
       <div class="card">
-        <h1>用户管理</h1>
+        <h1>用户</h1>
         <input id="uq" placeholder="@用户名 或 电报ID" />
         <div class="btns"><button onclick="searchUsers()">搜索</button></div>
         <div class="olist" id="ulist">输入后搜索</div>
-        <label>添加：电报ID</label><input id="atgid" placeholder="数字ID" />
+        <label>电报ID</label><input id="atgid" placeholder="数字ID" />
         <label>用户名</label><input id="auname" placeholder="username" />
         <label>姓名</label><input id="aname" placeholder="对外姓名" />
         <label>开通天数</label><input id="adays" type="number" value="365" min="1" max="3650" />
-        <div class="btns"><button class="ghost" onclick="document.getElementById('adays').value=15">15天</button><button class="ghost" onclick="document.getElementById('adays').value=90">90天</button><button class="ghost" onclick="document.getElementById('adays').value=365">一年</button></div>
+        <div class="btns">
+          <button class="ghost" onclick="document.getElementById('adays').value=15">15天</button>
+          <button class="ghost" onclick="document.getElementById('adays').value=90">90天</button>
+          <button class="ghost" onclick="document.getElementById('adays').value=365">一年</button>
+        </div>
         <div class="btns"><button onclick="addUser()">添加并开通</button></div>
       </div>
       <div class="card">
@@ -184,7 +219,7 @@
       btn.disabled=true;
       try{
         const j = await api('/api/mini/order', {plan:'year', rail:rail});
-        if(j.invoice && tg.openInvoice){ tg.openInvoice(j.invoice, st=>{ if(st==='paid'){ show(ok,'支付成功'); loadMe(); } btn.disabled=false; }); }
+        if(j.invoice && tg.openInvoice){ tg.openInvoice(j.invoice, st=>{ if(st==='paid'){ show(ok,'支付成功，登记已生效'); loadMe(); tab('me'); } btn.disabled=false; }); }
         else if(j.address){
           document.getElementById('checkout').classList.remove('hidden');
           document.getElementById('oid').textContent=j.code;
@@ -192,7 +227,7 @@
           document.getElementById('ochain').textContent=(j.chain||'TRC20').toUpperCase();
           document.getElementById('oaddr').textContent=j.address;
           window._addr=j.address;
-          show(ok,'请复制地址按金额转账，到账后自动刷新');
+          show(ok,'复制地址原额转账，到账后自动刷新');
           btn.disabled=false;
           watchPaid();
         }
@@ -217,7 +252,7 @@
       try{
         await api('/api/mini/cancel', {code: document.getElementById('oid').textContent});
         document.getElementById('checkout').classList.add('hidden');
-        show(ok,'订单已取消，可重新支付');
+        show(ok,'订单已取消');
       }catch(e){ show(err,e.message); }
     }
     async function lookup(){
@@ -239,7 +274,7 @@
         document.getElementById('until').textContent=j.paid_until||'—';
         document.getElementById('display').value=j.display_name||'';
         document.getElementById('card').value=j.card_text||'';
-        document.getElementById('needpay').textContent=j.paid?'':'充值后才能保存资料';
+        document.getElementById('needpay').textContent=j.paid?'保存后立即用于查询出卡':'开通后才能保存资料';
         if(j.is_admin) document.getElementById('n4').classList.remove('hidden');
       }catch(e){ show(err,e.message); }
     }
@@ -336,7 +371,7 @@
       catch(e){ show(err,e.message); }
     }
     async function save(){
-      try{ await api('/api/mini/profile', {display_name:document.getElementById('display').value, card_text:document.getElementById('card').value, username:user&&user.username}); show(ok,'资料已保存'); loadMe(); }
+      try{ await api('/api/mini/profile', {display_name:document.getElementById('display').value, card_text:document.getElementById('card').value, username:user&&user.username}); show(ok,'资料已保存并生效'); loadMe(); }
       catch(e){ show(err,e.message); }
     }
     loadMe();
