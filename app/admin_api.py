@@ -103,6 +103,9 @@ def mount_admin(app) -> None:
                 "address": get_setting(db, "usdt_address", USDT_ADDRESS),
                 "clone": clone_on(db),
                 "pending": pending,
+                "remind_enabled": get_setting(db, "remind_enabled", "1"),
+                "remind_days": get_setting(db, "remind_days", "7"),
+                "remind_text": get_setting(db, "remind_text", ""),
             }
         finally:
             db.close()
@@ -163,6 +166,16 @@ def mount_admin(app) -> None:
                     return JSONResponse({"error": "TRC20 地址无效"}, status_code=400)
                 set_setting(db, "usdt_address", addr)
                 return {"ok": True}
+            if action == "remind":
+                try:
+                    n = max(0, min(int(float(body.get("days") or 7)), 90))
+                except (TypeError, ValueError):
+                    n = 7
+                enabled = "1" if str(body.get("enabled") or "1") in {"1", "true", "on"} else "0"
+                set_setting(db, "remind_days", str(n))
+                set_setting(db, "remind_enabled", enabled)
+                set_setting(db, "remind_text", str(body.get("text") or "")[:300])
+                return {"ok": True, "remind_days": n, "remind_enabled": enabled}
             if action == "clone":
                 set_clone(db, not clone_on(db))
                 return {"ok": True, "clone": clone_on(db)}
