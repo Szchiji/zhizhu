@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import secrets
 from datetime import datetime, timedelta
 
@@ -8,6 +9,8 @@ from sqlalchemy.orm import Session
 
 from app.config import ADMIN_TG_IDS, PLAN_DEFAULT, STARS_MONTHLY, USDT_YEARLY
 from app.models import Identity, Order, OrderEvent, Setting, Tenant, utcnow
+
+USER_RE = re.compile(r"[A-Za-z0-9_]{3,32}")
 
 
 def is_staff(tg_id: int | None) -> bool:
@@ -47,6 +50,43 @@ def tenant_usable(tenant: Tenant, at: datetime | None = None) -> bool:
     if tenant.status == "owner" or is_staff(tenant.owner_tg_id):
         return True
     return bool(tenant.paid_until and tenant.paid_until > at)
+
+
+def parse_username(text: str) -> str:
+    raw = (text or "").strip()
+    for prefix in ("核验", "查询", "verify", "q_"):
+        if raw.lower().startswith(prefix):
+            raw = raw[len(prefix):].strip()
+    raw = raw.lstrip("@")
+    m = USER_RE.search(raw.replace(" ", ""))
+    return m.group(0) if m else ""
+
+
+def find_paid_identity(db: Session, username: str) -> Identity | None:
+    name = parse_username(username)
+    if not name:
+        return None
+    ident = db.scalar(select(Identity).where(Identity.username.ilike(name)))
+    if not ident:
+        return None
+    tenant = db.get(Tenant, ident.tenant_id)
+    if tenant and tenant_usable(tenant):
+        return ident
+    return None
+
+
+def save_paid_profile(db: Session, tenant: Tenant, user) -> Identity:
+    ident = tenant.identity or Identity(tenant_id=tenant.id)
+    if user:
+        if user.username:
+            ident.username = user.username
+        if not ident.official_user_id:
+            ident.official_user_id = user.id
+        if not ident.display_name:
+            ident.display_name = user.full_name
+    db.add(ident)
+    db.commit()
+    return ident
 
 
 def open_order(db: Session, tenant_id: int) -> Order | None:
