@@ -8,8 +8,6 @@ from sqlalchemy import select
 from telegram import (
     InlineKeyboardButton,
     InlineKeyboardMarkup,
-    InlineQueryResultArticle,
-    InputTextMessageContent,
     LabeledPrice,
     Update,
     WebAppInfo,
@@ -28,6 +26,7 @@ from telegram.ext import (
 from app.config import ADMIN_TG_IDS, PUBLIC_BASE_URL, USDT_ADDRESS, USDT_CHAIN, WEBHOOK_BASE_URL, WEBHOOK_SECRET
 from app.crypto_token import encrypt_token
 from app.db import get_session
+from app.inline_query import on_inline
 from app.models import Identity, Order, Tenant, utcnow
 from app.plans import PLANS, clone_on, plan_stars, plan_usdt, price_board, set_clone
 from app.services import (
@@ -82,14 +81,7 @@ def _kb_admin(db) -> InlineKeyboardMarkup:
 def _kb_adm_plans() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         [
-            [
-                InlineKeyboardButton("半月", callback_data="adm:pk:half"),
-                InlineKeyboardButton("季度", callback_data="adm:pk:quarter"),
-            ],
-            [
-                InlineKeyboardButton("一年", callback_data="adm:pk:year"),
-                InlineKeyboardButton("永久", callback_data="adm:pk:life"),
-            ],
+            [InlineKeyboardButton("一年", callback_data="adm:pk:year")],
             [InlineKeyboardButton("返回后台", callback_data="admin")],
         ]
     )
@@ -101,19 +93,6 @@ def _kb_home(db, tenant: Tenant) -> InlineKeyboardMarkup:
     rows: list[list[InlineKeyboardButton]] = [[InlineKeyboardButton("查询登记", callback_data="ask_lookup")]]
     if mini.startswith("https://"):
         rows.append([InlineKeyboardButton("开通套餐", web_app=WebAppInfo(url=mini))])
-    else:
-        rows.append(
-            [
-                InlineKeyboardButton("半月", callback_data="plan:half"),
-                InlineKeyboardButton("季度", callback_data="plan:quarter"),
-            ]
-        )
-        rows.append(
-            [
-                InlineKeyboardButton("一年", callback_data="plan:year"),
-                InlineKeyboardButton("永久", callback_data="plan:life"),
-            ]
-        )
     if paid:
         rows.append([InlineKeyboardButton("我的登记", callback_data="edit")])
     rows.append([InlineKeyboardButton("使用说明", callback_data="guide")])
@@ -153,10 +132,21 @@ async def _send_lookup(message, db, name: str, bot_name: str) -> None:
 
 async def _show_admin(message, db) -> None:
     addr = _pay_address(db) or "未设"
-    await message.reply_text(
-        f"管理后台\n\n{price_board(db)}\n收款地址：{addr}",
-        reply_markup=_kb_admin(db),
+    pending = list(
+        db.scalars(
+            select(Order)
+            .where(Order.rail == "usdt", Order.status.in_(("pending", "confirming")))
+            .order_by(Order.id.desc())
+            .limit(8)
+        )
     )
+    lines = [f"管理后台\n\n{price_board(db)}", f"收款地址：{addr}", "", "待确认订单（订单号即 VH- 开头）"]
+    if pending:
+        for o in pending:
+            lines.append(f"{o.public_code}  {float(o.amount):g}U  {o.status}")
+    else:
+        lines.append("暂无待确认 USDT 订单")
+    await message.reply_text("\n".join(lines), reply_markup=_kb_admin(db))
 
 
 async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -199,7 +189,7 @@ async def cmd_status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
 async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.effective_message.reply_text(
         "使用说明\n\n"
-        "1. 查询：点按钮或直接发 @用户名\n"
+        "1. 群里输入 @zhizhusp_bot 加用户名，发出带「通过 @蜘蛛」的官方卡\n"
         "2. 开通：左下角「开通套餐」\n"
         "3. 开通后自动生成登记"
     )
@@ -214,29 +204,6 @@ async def cmd_admin(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         await _show_admin(update.effective_message, db)
     finally:
         db.close()
-
-
-async def on_inline(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    q = update.inline_query
-    name = parse_username(q.query or "")
-    bot_name = _bot(context)
-    param = f"q_{name}" if name else "ask"
-    start = f"https://t.me/{bot_name}?start={param}"
-    title = f"查询 @{name}" if name else "蜘蛛官方核验"
-    body = f"正在查询 @{name}" if name else "点击下方按钮，在蜘蛛中发送要查询的用户名。"
-    await q.answer(
-        [
-            InlineQueryResultArticle(
-                id=(q.id or "r1")[:64],
-                title=title,
-                description="进入机器人查看官方登记",
-                input_message_content=InputTextMessageContent(body),
-                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("打开查询", url=start)]]),
-            )
-        ],
-        cache_time=0,
-        is_personal=True,
-    )
 
 
 async def _admin_cb(query, context, data: str, db) -> bool:
@@ -284,7 +251,8 @@ async def _admin_cb(query, context, data: str, db) -> bool:
         return True
     if data == "adm:confirm":
         context.user_data["wait"] = "admin_confirm"
-        await query.message.reply_text("发送订单号，例如 VH-XXXXXX，可另起一行贴交易哈希。")
+        await query.message.reply_text("发送下方列出的订单号，例如 VH-XXXXXX。")
+        await _show_admin(query.message, db)
         return True
     if data == "adm:clone":
         on = not clone_on(db)
@@ -386,7 +354,6 @@ async def _pay_usdt(message, tenant: Tenant, db, key: str) -> None:
         await message.reply_text("已有待支付订单，请先完成或等待过期。")
         return
     code = new_code()
-    url = f"{PUBLIC_BASE_URL}/pay/usdt/{code}"
     amount = plan_usdt(db, key)
     db.add(
         Order(
@@ -398,7 +365,6 @@ async def _pay_usdt(message, tenant: Tenant, db, key: str) -> None:
             amount=amount,
             currency="USDT",
             chain=USDT_CHAIN,
-            pay_url=url,
             pay_address=addr,
             status="pending",
             expires_at=utcnow() + timedelta(minutes=20),
@@ -406,8 +372,7 @@ async def _pay_usdt(message, tenant: Tenant, db, key: str) -> None:
     )
     db.commit()
     await message.reply_text(
-        f"{PLANS[key]['label']}  {amount:g} USDT\n订单 {code}\n20 分钟内有效",
-        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("打开收银台", url=url)]]),
+        f"{PLANS[key]['label']}  {amount:g} USDT\n订单 {code}\n20 分钟内有效"
     )
 
 
@@ -460,7 +425,7 @@ async def on_successful_payment(update: Update, context: ContextTypes.DEFAULT_TY
         tenant = activate_order(db, order)
         save_paid_profile(db, tenant, update.effective_user)
         await update.message.reply_text(
-            f"已开通{PLANS.get(order.plan, {}).get('label', '')}至 {tenant.paid_until}\n点「我的登记」补充资料。"
+            f"已开通{PLANS.get(order.plan, {}).get('label', '')}至 {tenant.paid_until}"
         )
     finally:
         db.close()
