@@ -115,6 +115,12 @@
         <div class="btns"><button class="ghost" onclick="setAddr()">保存地址</button><button class="ghost" onclick="toggleClone()" id="aclone">克隆</button></div>
       </div>
       <div class="card">
+        <h1>强制订阅</h1>
+        <p class="sub">填 @频道名 或 -100 频道ID。机器人需是频道管理员。</p>
+        <label>频道</label><input id="achannel" placeholder="@channel 或 -100xxxxxxxxxx" />
+        <div class="btns"><button class="ghost" onclick="saveChannel()">保存频道</button><button class="ghost" id="achon" onclick="toggleChannel()">强制订阅：关</button></div>
+      </div>
+      <div class="card">
         <h1>用户管理</h1>
         <input id="uq" placeholder="@用户名 或 电报ID" />
         <div class="btns"><button onclick="searchUsers()">搜索</button></div>
@@ -253,6 +259,9 @@
         document.getElementById('ausdt').value=j.usdt||'';
         document.getElementById('aaddr').value=j.address||'';
         document.getElementById('aclone').textContent=j.clone?'克隆：开':'克隆：关';
+        document.getElementById('achannel').value=j.force_channel||'';
+        window._ch=j.force_channel_on==='1';
+        document.getElementById('achon').textContent=window._ch?'强制订阅：开':'强制订阅：关';
         const el=document.getElementById('apend');
         el.innerHTML=(j.pending||[]).length?j.pending.map(o=>'<div onclick="document.getElementById(\'acode\').value=\''+o.code+'\'">'+o.code+' · '+o.amount+'U · '+o.status+'</div>').join(''):'暂无待确认';
       }catch(e){ show(err,e.message); }
@@ -265,6 +274,21 @@
     async function setAddr(){
       try{ await api('/api/mini/admin',{action:'addr',address:document.getElementById('aaddr').value}); show(ok,'地址已更新'); }
       catch(e){ show(err,e.message); }
+    }
+    async function saveChannel(){
+      try{
+        const j=await api('/api/mini/admin',{action:'channel',channel:document.getElementById('achannel').value});
+        document.getElementById('achannel').value=j.force_channel||'';
+        show(ok,'频道已保存');
+      }catch(e){ show(err,e.message); }
+    }
+    async function toggleChannel(){
+      try{
+        const j=await api('/api/mini/admin',{action:'channel_toggle'});
+        window._ch=j.force_channel_on==='1';
+        document.getElementById('achon').textContent=window._ch?'强制订阅：开':'强制订阅：关';
+        show(ok,window._ch?'强制订阅已开':'强制订阅已关');
+      }catch(e){ show(err,e.message); }
     }
     async function toggleClone(){
       try{ const j=await api('/api/mini/admin',{action:'clone'}); show(ok,j.clone?'克隆已开':'克隆已关'); loadAdmin(); }
