@@ -34,6 +34,7 @@ from app.services import (
     activate_order,
     add_event,
     find_paid_identity,
+    fmt_until,
     get_or_create_tenant,
     get_setting,
     new_code,
@@ -104,7 +105,7 @@ async def lifespan(app: FastAPI):
     if mini.startswith("https://"):
         try:
             await platform_app.bot.set_chat_menu_button(
-                menu_button=MenuButtonWebApp(text="工作台", web_app=WebAppInfo(url=mini))
+                menu_button=MenuButtonWebApp(text="小程序", web_app=WebAppInfo(url=mini))
             )
         except Exception as exc:
             log.warning("menu button failed: %s", exc)
@@ -170,7 +171,7 @@ async def mini_me(user_id: int = 0, init_data: str = "", username: str = "", dis
                 ),
             )
         ident = db.scalar(select(Identity).where(Identity.tenant_id == tenant.id)) or tenant.identity
-        until = tenant.paid_until.strftime("%Y-%m-%d %H:%M") if tenant.paid_until else ("管理员" if paid else "")
+        until = fmt_until(tenant.paid_until) if tenant.paid_until else ("管理员" if paid else "")
         return {
             "ok": True,
             "paid": paid,
