@@ -43,7 +43,7 @@ from app.services import (
     tenant_usable,
 )
 from app.tenant_bot import handle_tenant_update
-from app.tg_webapp import user_id_from_init
+from app.tg_webapp import user_from_init, user_id_from_init
 from app.usdt_watch import watch_loop
 from app.verify import card_text
 
@@ -104,7 +104,7 @@ async def lifespan(app: FastAPI):
     if mini.startswith("https://"):
         try:
             await platform_app.bot.set_chat_menu_button(
-                menu_button=MenuButtonWebApp(text="开通套餐", web_app=WebAppInfo(url=mini))
+                menu_button=MenuButtonWebApp(text="工作台", web_app=WebAppInfo(url=mini))
             )
         except Exception as exc:
             log.warning("menu button failed: %s", exc)
@@ -117,7 +117,7 @@ async def lifespan(app: FastAPI):
         await platform_app.shutdown()
 
 
-app = FastAPI(title="Zhizhu VerifyHub", lifespan=lifespan)
+app = FastAPI(title="VerifyHub", lifespan=lifespan)
 mount_admin(app)
 
 
@@ -133,7 +133,7 @@ async def healthz():
 
 @app.get("/")
 async def root():
-    return {"name": "zhizhu", "mini": "/mini"}
+    return {"name": "verifyhub", "mini": "/mini"}
 
 
 @app.get("/mini", response_class=HTMLResponse)
@@ -158,8 +158,17 @@ async def mini_me(user_id: int = 0, init_data: str = "", username: str = "", dis
     try:
         tenant = get_or_create_tenant(db, uid)
         paid = tenant_usable(tenant)
+        info = user_from_init(init_data)
         if paid:
-            save_paid_profile(db, tenant, SimpleNamespace(id=uid, username=username or None, full_name=display_name or ""))
+            save_paid_profile(
+                db,
+                tenant,
+                SimpleNamespace(
+                    id=uid,
+                    username=username or info.get("username") or None,
+                    full_name=display_name or info.get("full_name") or "",
+                ),
+            )
         ident = db.scalar(select(Identity).where(Identity.tenant_id == tenant.id)) or tenant.identity
         until = tenant.paid_until.strftime("%Y-%m-%d %H:%M") if tenant.paid_until else ("管理员" if paid else "")
         return {
@@ -270,6 +279,16 @@ async def mini_order(request: Request):
     db = get_session()
     try:
         tenant = get_or_create_tenant(db, uid)
+        info = user_from_init(str(body.get("init_data") or ""))
+        save_paid_profile(
+            db,
+            tenant,
+            SimpleNamespace(
+                id=uid,
+                username=body.get("username") or info.get("username") or None,
+                full_name=body.get("display_name") or info.get("full_name") or "",
+            ),
+        )
         _drop_open_orders(db, tenant.id)
         if rail == "usdt":
             addr = get_setting(db, "usdt_address", USDT_ADDRESS)
@@ -321,7 +340,7 @@ async def mini_order(request: Request):
             r = await client.post(
                 f"https://api.telegram.org/bot{PLATFORM_BOT_TOKEN}/createInvoiceLink",
                 json={
-                    "title": f"蜘蛛核验·{PLANS[key]['label']}",
+                    "title": f"官方核验·{PLANS[key]['label']}",
                     "description": "开通后可保存官方资料",
                     "payload": payload,
                     "provider_token": "",
