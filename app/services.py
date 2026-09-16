@@ -114,6 +114,27 @@ def find_paid_identity(db: Session, username: str) -> Identity | None:
     return None
 
 
+async def resolve_paid_identity(db: Session, username: str, bot=None):
+    name = parse_username(username)
+    ident = find_paid_identity(db, name) if name else None
+    if ident or not bot or not name:
+        return ident
+    try:
+        chat = await bot.get_chat("@" + name)
+    except Exception:
+        return None
+    ident = find_paid_by_tg_id(db, chat.id)
+    if not ident:
+        return None
+    ident.username = getattr(chat, "username", None) or name
+    if not ident.official_user_id:
+        ident.official_user_id = chat.id
+    if not (ident.display_name or "").strip():
+        ident.display_name = getattr(chat, "full_name", None) or getattr(chat, "first_name", "") or ""
+    db.commit()
+    return ident
+
+
 def save_paid_profile(db: Session, tenant: Tenant, user=None) -> Identity:
     ident = db.scalar(select(Identity).where(Identity.tenant_id == tenant.id))
     if not ident:
