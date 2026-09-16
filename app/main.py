@@ -40,6 +40,15 @@ def _days_text(days: int) -> str:
     return f"{days} 天"
 
 
+def _drop_open_orders(db, tenant_id: int) -> None:
+    while True:
+        order = open_order(db, tenant_id)
+        if not order:
+            return
+        add_event(db, order, "canceled", "replaced_by_new_checkout")
+        db.commit()
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global platform_app
@@ -127,8 +136,7 @@ async def mini_order(request: Request):
     db = get_session()
     try:
         tenant = get_or_create_tenant(db, user_id)
-        if open_order(db, tenant.id):
-            return JSONResponse({"error": "已有待支付订单，请先完成或等待过期"}, status_code=409)
+        _drop_open_orders(db, tenant.id)
         if rail == "usdt":
             addr = get_setting(db, "usdt_address", USDT_ADDRESS)
             if not addr:
