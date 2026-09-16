@@ -96,6 +96,17 @@ def mount_admin(app) -> None:
                 select(Order).where(Order.rail == "usdt", Order.status.in_(("pending", "confirming"))).limit(30)
             ):
                 pending.append({"code": o.public_code, "amount": f"{float(o.amount):g}", "status": o.status, "txid": o.txid or ""})
+            orders = []
+            for o in db.scalars(select(Order).order_by(Order.id.desc()).limit(20)):
+                tenant = db.get(Tenant, o.tenant_id)
+                orders.append({
+                    "code": o.public_code,
+                    "rail": o.rail,
+                    "amount": f"{float(o.amount):g}",
+                    "status": o.status,
+                    "tg_id": tenant.owner_tg_id if tenant else None,
+                    "txid": o.txid or "",
+                })
             return {
                 "ok": True,
                 "board": price_board(db),
@@ -104,6 +115,7 @@ def mount_admin(app) -> None:
                 "address": get_setting(db, "usdt_address", USDT_ADDRESS),
                 "clone": clone_on(db),
                 "pending": pending,
+                "orders": orders,
                 "remind_enabled": get_setting(db, "remind_enabled", "1"),
                 "remind_days": get_setting(db, "remind_days", "7"),
                 "remind_text": get_setting(db, "remind_text", ""),
@@ -262,6 +274,28 @@ def mount_admin(app) -> None:
                 target.paid_until = None
                 db.commit()
                 return {"ok": True}
+            if action == "user_bind":
+                try:
+                    tg_id = int(body.get("tg_id") or 0)
+                except (TypeError, ValueError):
+                    tg_id = 0
+                name = parse_username(str(body.get("username") or "")) or str(body.get("username") or "").lstrip("@")
+                if not name:
+                    return JSONResponse({"error": "请填用户名"}, status_code=400)
+                tenant = db.scalar(select(Tenant).where(Tenant.owner_tg_id == tg_id)) if tg_id else None
+                if not tenant:
+                    ident = db.scalar(select(Identity).where(Identity.official_user_id == tg_id)) if tg_id else None
+                    tenant = db.get(Tenant, ident.tenant_id) if ident else None
+                if not tenant:
+                    return JSONResponse({"error": "未找到该电报ID的开通记录，先搜索用户"}, status_code=404)
+                ident = tenant.identity or Identity(tenant_id=tenant.id)
+                ident.username = name
+                ident.official_user_id = ident.official_user_id or tenant.owner_tg_id
+                if body.get("display_name"):
+                    ident.display_name = str(body.get("display_name"))[:64]
+                db.add(ident)
+                db.commit()
+                return {"ok": True, "user": _dump_user(tenant)}
             return JSONResponse({"error": "unknown action"}, status_code=400)
         finally:
             db.close()
