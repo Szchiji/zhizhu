@@ -46,17 +46,6 @@ from app.services import (
 from app.verify import card_kb, card_text, share_url
 
 TOKEN_RE = __import__("re").compile(r"^\d{6,}:[A-Za-z0-9_-]{20,}$")
-ADMIN_HELP = (
-    "管理员命令\n\n"
-    "/admin  本说明\n"
-    "/prices  查看套餐价格\n"
-    "/setprice half|quarter|year|life stars|usdt 金额\n"
-    "  例：/setprice year stars 800\n"
-    "/setaddr TRC20地址\n"
-    "/confirm VH-XXXXXX [txid]\n"
-    "/clone on 或 /clone off\n"
-    "/status  查看自己状态"
-)
 
 
 def _is_admin(user_id: int) -> bool:
@@ -76,12 +65,40 @@ def _mini() -> str:
     return f"{base}/mini" if base else ""
 
 
+def _kb_admin(db) -> InlineKeyboardMarkup:
+    clone = "克隆：开" if clone_on(db) else "克隆：关"
+    return InlineKeyboardMarkup(
+        [
+            [InlineKeyboardButton("当前价格", callback_data="adm:prices")],
+            [InlineKeyboardButton("修改价格", callback_data="adm:price")],
+            [InlineKeyboardButton("修改收款地址", callback_data="adm:addr")],
+            [InlineKeyboardButton("确认 USDT 订单", callback_data="adm:confirm")],
+            [InlineKeyboardButton(clone, callback_data="adm:clone")],
+            [InlineKeyboardButton("返回首页", callback_data="status")],
+        ]
+    )
+
+
+def _kb_adm_plans() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        [
+            [
+                InlineKeyboardButton("半月", callback_data="adm:pk:half"),
+                InlineKeyboardButton("季度", callback_data="adm:pk:quarter"),
+            ],
+            [
+                InlineKeyboardButton("一年", callback_data="adm:pk:year"),
+                InlineKeyboardButton("永久", callback_data="adm:pk:life"),
+            ],
+            [InlineKeyboardButton("返回后台", callback_data="admin")],
+        ]
+    )
+
+
 def _kb_home(db, tenant: Tenant) -> InlineKeyboardMarkup:
     paid = tenant_usable(tenant)
     mini = _mini()
-    rows: list[list[InlineKeyboardButton]] = [
-        [InlineKeyboardButton("查询登记", callback_data="ask_lookup")],
-    ]
+    rows: list[list[InlineKeyboardButton]] = [[InlineKeyboardButton("查询登记", callback_data="ask_lookup")]]
     if mini.startswith("https://"):
         rows.append([InlineKeyboardButton("开通套餐", web_app=WebAppInfo(url=mini))])
     else:
@@ -134,6 +151,14 @@ async def _send_lookup(message, db, name: str, bot_name: str) -> None:
     )
 
 
+async def _show_admin(message, db) -> None:
+    addr = _pay_address(db) or "未设"
+    await message.reply_text(
+        f"管理后台\n\n{price_board(db)}\n收款地址：{addr}",
+        reply_markup=_kb_admin(db),
+    )
+
+
 async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     context.user_data.pop("wait", None)
     db = get_session()
@@ -156,8 +181,7 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             text = (
                 "蜘蛛 · 官方身份核验\n\n"
                 "查询：点「查询登记」，再发送对方 @用户名\n"
-                "开通：点「开通套餐」进小程序付费\n"
-                "登记：付费成功后按提示保存姓名与账号"
+                "开通：点「开通套餐」进小程序付费"
             )
         if payload in {"q", "ask"}:
             context.user_data["wait"] = "lookup"
@@ -175,11 +199,9 @@ async def cmd_status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
 async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.effective_message.reply_text(
         "使用说明\n\n"
-        "1. 查询登记：点按钮或直接发 @用户名\n"
-        "2. 任意对话输入 @"
-        f"{_bot(context)} 加空格也可进入查询\n"
-        "3. 开通套餐：点左下角菜单或首页「开通套餐」\n"
-        "4. 开通后可保存自己的官方资料"
+        "1. 查询：点按钮或直接发 @用户名\n"
+        "2. 开通：左下角「开通套餐」\n"
+        "3. 开通后自动生成登记"
     )
 
 
@@ -189,7 +211,7 @@ async def cmd_admin(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         return
     db = get_session()
     try:
-        await update.effective_message.reply_text(ADMIN_HELP + "\n\n" + price_board(db))
+        await _show_admin(update.effective_message, db)
     finally:
         db.close()
 
@@ -217,6 +239,61 @@ async def on_inline(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     )
 
 
+async def _admin_cb(query, context, data: str, db) -> bool:
+    uid = query.from_user.id
+    if not data.startswith("adm:") and data != "admin":
+        return False
+    if not _is_admin(uid):
+        await query.message.reply_text("仅管理员可用。")
+        return True
+    if data == "admin" or data == "adm:home":
+        await _show_admin(query.message, db)
+        return True
+    if data == "adm:prices":
+        await query.message.reply_text(price_board(db), reply_markup=_kb_admin(db))
+        return True
+    if data == "adm:price":
+        await query.message.reply_text("选择要改价的套餐", reply_markup=_kb_adm_plans())
+        return True
+    if data.startswith("adm:pk:"):
+        key = data.split(":")[2]
+        if key not in PLANS:
+            return True
+        await query.message.reply_text(
+            f"{PLANS[key]['label']} 现价 {plan_stars(db, key)}⭐ / {plan_usdt(db, key):g} U\n改哪一种？",
+            reply_markup=InlineKeyboardMarkup(
+                [
+                    [
+                        InlineKeyboardButton("Stars", callback_data=f"adm:pr:{key}:stars"),
+                        InlineKeyboardButton("USDT", callback_data=f"adm:pr:{key}:usdt"),
+                    ],
+                    [InlineKeyboardButton("返回", callback_data="adm:price")],
+                ]
+            ),
+        )
+        return True
+    if data.startswith("adm:pr:"):
+        _, _, key, rail = data.split(":")
+        context.user_data["wait"] = f"admin_price:{key}:{rail}"
+        unit = "⭐" if rail == "stars" else "USDT"
+        await query.message.reply_text(f"发送新的 {PLANS[key]['label']} {unit} 价格，只发数字。")
+        return True
+    if data == "adm:addr":
+        context.user_data["wait"] = "admin_addr"
+        await query.message.reply_text(f"当前地址：{_pay_address(db) or '未设'}\n发送新的 TRC20 地址。")
+        return True
+    if data == "adm:confirm":
+        context.user_data["wait"] = "admin_confirm"
+        await query.message.reply_text("发送订单号，例如 VH-XXXXXX，可另起一行贴交易哈希。")
+        return True
+    if data == "adm:clone":
+        on = not clone_on(db)
+        set_clone(db, on)
+        await query.message.reply_text("克隆已开启" if on else "克隆已关闭", reply_markup=_kb_admin(db))
+        return True
+    return True
+
+
 async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     query = update.callback_query
     await query.answer()
@@ -224,6 +301,8 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     db = get_session()
     try:
         tenant = get_or_create_tenant(db, query.from_user.id)
+        if await _admin_cb(query, context, data, db):
+            return
         if data == "status":
             context.args = []
             await cmd_start(update, context)
@@ -234,9 +313,6 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
             return
         if data == "guide":
             await cmd_help(update, context)
-            return
-        if data == "admin":
-            await cmd_admin(update, context)
             return
         if data == "edit":
             if not tenant_usable(tenant):
@@ -390,11 +466,70 @@ async def on_successful_payment(update: Update, context: ContextTypes.DEFAULT_TY
         db.close()
 
 
+async def _handle_admin_text(update, context, text: str) -> bool:
+    wait = context.user_data.get("wait") or ""
+    if not wait.startswith("admin_"):
+        return False
+    if not _is_admin(update.effective_user.id):
+        context.user_data.pop("wait", None)
+        return False
+    db = get_session()
+    try:
+        if wait == "admin_addr":
+            addr = text.split()[0]
+            if not addr.startswith("T") or len(addr) < 30:
+                await update.effective_message.reply_text("请发送 TRC20 地址（T 开头）。")
+                return True
+            set_setting(db, "usdt_address", addr)
+            context.user_data.pop("wait", None)
+            await update.effective_message.reply_text(f"收款地址已更新。\n{addr}", reply_markup=_kb_admin(db))
+            return True
+        if wait.startswith("admin_price:"):
+            _, key, rail = wait.split(":")
+            try:
+                value = float(text.replace(",", ""))
+            except ValueError:
+                await update.effective_message.reply_text("请只发数字。")
+                return True
+            if rail == "stars":
+                set_setting(db, f"stars_{key}", str(int(value)))
+            else:
+                set_setting(db, f"usdt_{key}", f"{value:g}")
+            context.user_data.pop("wait", None)
+            await update.effective_message.reply_text(price_board(db), reply_markup=_kb_admin(db))
+            return True
+        if wait == "admin_confirm":
+            parts = text.split()
+            code = parts[0].upper()
+            order = db.scalar(select(Order).where(Order.public_code == code))
+            if not order:
+                await update.effective_message.reply_text("订单不存在，请重发订单号。")
+                return True
+            if order.status in {"active", "paid"}:
+                await update.effective_message.reply_text("该订单已开通。")
+                context.user_data.pop("wait", None)
+                return True
+            if len(parts) > 1:
+                order.txid = parts[1]
+            add_event(db, order, "paid", "manual_confirm")
+            tenant = activate_order(db, order)
+            context.user_data.pop("wait", None)
+            await update.effective_message.reply_text(
+                f"{order.public_code} 已开通至 {tenant.paid_until}", reply_markup=_kb_admin(db)
+            )
+            return True
+        return False
+    finally:
+        db.close()
+
+
 async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if update.message and update.message.web_app_data:
         await on_webapp(update, context)
         return
     text = (update.message.text or "").strip()
+    if await _handle_admin_text(update, context, text):
+        return
     if TOKEN_RE.match(text):
         await on_token(update, context)
         return
@@ -467,10 +602,7 @@ async def cmd_setid(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     db = get_session()
     try:
         tenant, ident = await _need_paid(update, db)
-        if not ident:
-            return
-        if not context.args or not context.args[0].isdigit():
-            await update.effective_message.reply_text("用法：/setid 数字ID")
+        if not ident or not context.args or not context.args[0].isdigit():
             return
         ident.official_user_id = int(context.args[0])
         db.add(ident)
@@ -484,10 +616,7 @@ async def cmd_setname(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     db = get_session()
     try:
         tenant, ident = await _need_paid(update, db)
-        if not ident:
-            return
-        if not context.args:
-            await update.effective_message.reply_text("用法：/setname 显示名")
+        if not ident or not context.args:
             return
         ident.display_name = " ".join(context.args)
         if update.effective_user.username:
@@ -503,10 +632,7 @@ async def cmd_setalert(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     db = get_session()
     try:
         tenant, ident = await _need_paid(update, db)
-        if not ident:
-            return
-        if not context.args:
-            await update.effective_message.reply_text("用法：/setalert 文案")
+        if not ident or not context.args:
             return
         ident.alert_text = " ".join(context.args)[:200]
         db.add(ident)
@@ -520,10 +646,7 @@ async def cmd_setcard(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     db = get_session()
     try:
         tenant, ident = await _need_paid(update, db)
-        if not ident:
-            return
-        if not context.args:
-            await update.effective_message.reply_text("用法：/setcard 正文")
+        if not ident or not context.args:
             return
         ident.card_text = " ".join(context.args)
         db.add(ident)
@@ -536,80 +659,25 @@ async def cmd_setcard(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
 async def cmd_prices(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     db = get_session()
     try:
-        await update.effective_message.reply_text(price_board(db) + f"\n地址：{_pay_address(db) or '未设'}")
-    finally:
-        db.close()
-
-
-async def cmd_setprice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    if not _is_admin(update.effective_user.id):
-        return
-    if len(context.args) < 3:
-        await update.effective_message.reply_text("用法：/setprice year stars 800")
-        return
-    key, rail, raw = context.args[0].lower(), context.args[1].lower(), context.args[2]
-    if key not in PLANS:
-        await update.effective_message.reply_text("套餐：half / quarter / year / life")
-        return
-    db = get_session()
-    try:
-        if rail in {"stars", "star", "xtr"}:
-            set_setting(db, f"stars_{key}", str(int(float(raw))))
-        elif rail in {"usdt", "u"}:
-            set_setting(db, f"usdt_{key}", f"{float(raw):g}")
-        else:
-            await update.effective_message.reply_text("通道：stars 或 usdt")
-            return
         await update.effective_message.reply_text(price_board(db))
     finally:
         db.close()
 
 
+async def cmd_setprice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    await cmd_admin(update, context)
+
+
 async def cmd_clone(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    if not _is_admin(update.effective_user.id):
-        return
-    db = get_session()
-    try:
-        if not context.args or context.args[0].lower() not in {"on", "off", "开", "关"}:
-            await update.effective_message.reply_text(f"克隆：{'开' if clone_on(db) else '关'}\n/clone on 或 off")
-            return
-        on = context.args[0].lower() in {"on", "开"}
-        set_clone(db, on)
-        await update.effective_message.reply_text("克隆已开启" if on else "克隆已关闭")
-    finally:
-        db.close()
+    await cmd_admin(update, context)
 
 
 async def cmd_setaddr(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    if not _is_admin(update.effective_user.id) or not context.args:
-        return
-    db = get_session()
-    try:
-        set_setting(db, "usdt_address", context.args[0].strip())
-        await update.effective_message.reply_text("地址已更新。")
-    finally:
-        db.close()
+    await cmd_admin(update, context)
 
 
 async def cmd_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    if not _is_admin(update.effective_user.id) or not context.args:
-        return
-    db = get_session()
-    try:
-        order = db.scalar(select(Order).where(Order.public_code == context.args[0].upper()))
-        if not order:
-            await update.effective_message.reply_text("订单不存在")
-            return
-        if order.status in {"active", "paid"}:
-            await update.effective_message.reply_text("已开通")
-            return
-        if len(context.args) > 1:
-            order.txid = context.args[1]
-        add_event(db, order, "paid", "manual_confirm")
-        tenant = activate_order(db, order)
-        await update.effective_message.reply_text(f"{order.public_code} 已开通至 {tenant.paid_until}")
-    finally:
-        db.close()
+    await cmd_admin(update, context)
 
 
 def build_platform_app(token: str) -> Application:
