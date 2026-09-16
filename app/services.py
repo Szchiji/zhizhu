@@ -10,7 +10,16 @@ from sqlalchemy.orm import Session
 from app.config import ADMIN_TG_IDS, PLAN_DEFAULT, STARS_MONTHLY, USDT_YEARLY
 from app.models import Identity, Order, OrderEvent, Setting, Tenant, utcnow
 
-USER_RE = re.compile(r"[A-Za-z0-9_]{3,32}")
+USER_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_]{3,31}$")
+SKIP_NAMES = {
+    "https",
+    "http",
+    "www",
+    "telegram",
+    "zhizhusp_bot",
+    "start",
+    "join",
+}
 
 
 def is_staff(tg_id: int | None) -> bool:
@@ -37,7 +46,7 @@ def get_or_create_tenant(db: Session, owner_tg_id: int) -> Tenant:
         tenant = Tenant(owner_tg_id=owner_tg_id, status="unpaid", plan=PLAN_DEFAULT)
     db.add(tenant)
     db.flush()
-    db.add(Identity(tenant_id=tenant.id, alert_text="这是公示的官方账号，只认这一个号"))
+    db.add(Identity(tenant_id=tenant.id, alert_text="此为官方登记账号"))
     db.commit()
     db.refresh(tenant)
     return tenant
@@ -54,12 +63,19 @@ def tenant_usable(tenant: Tenant, at: datetime | None = None) -> bool:
 
 def parse_username(text: str) -> str:
     raw = (text or "").strip()
+    if re.search(r"https?://|t\.me/", raw, re.I):
+        m = re.search(r"@([A-Za-z][A-Za-z0-9_]{3,31})", raw)
+        name = m.group(1) if m else ""
+        return "" if name.lower() in SKIP_NAMES else name
     for prefix in ("核验", "查询", "verify", "q_"):
         if raw.lower().startswith(prefix):
-            raw = raw[len(prefix):].strip()
+            raw = raw[len(prefix) :].strip()
     raw = raw.lstrip("@")
-    m = USER_RE.search(raw.replace(" ", ""))
-    return m.group(0) if m else ""
+    token = re.split(r"[\s/?=&]+", raw)[0] if raw else ""
+    token = token.strip("@")
+    if not USER_RE.fullmatch(token) or token.lower() in SKIP_NAMES:
+        return ""
+    return token
 
 
 def find_paid_identity(db: Session, username: str) -> Identity | None:
