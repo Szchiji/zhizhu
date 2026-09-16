@@ -31,7 +31,7 @@ def card_text(ident: Identity, *, watermark: bool = False, bot_username: str = "
         lines += [extra, ""]
     lines += [
         "谨防仿冒：以本机器人实时查询为准",
-        f"群里输入  @{bot}  + 用户名",
+        f"任何输入框内输入：  @{bot}  + 用户名",
         "自己也要官方卡：点下方「开通官方核验」",
     ]
     return "\n".join(lines)
@@ -40,26 +40,20 @@ def card_text(ident: Identity, *, watermark: bool = False, bot_username: str = "
 def promo_text(bot_name: str = "", name: str = "") -> str:
     bot = _bot(bot_name)
     brand = brand_name()
-    if name:
-        return "\n".join([
-            f"✅  {brand}官方核验",
-            "━━━━━━━━━━━━",
-            f"来源：@{bot}",
-            "━━━━━━━━━━━━",
-            f"@{name}  尚未登记",
-            "━━━━━━━━━━━━",
-            "谨防仿冒：以本机器人实时查询为准",
-            f"群里输入  @{bot}  + 用户名",
-            "自己也要官方卡：点下方「开通官方核验」",
-        ])
-    return "\n".join([
+    head = [
         f"✅  {brand}官方核验",
         "━━━━━━━━━━━━",
         f"来源：@{bot}",
         "━━━━━━━━━━━━",
-        f"群里输入  @{bot}  + 用户名",
+    ]
+    if name:
+        head += [f"@{name}  尚未登记", "━━━━━━━━━━━━"]
+    head += [
+        "谨防仿冒：以本机器人实时查询为准",
+        f"任何输入框内输入：  @{bot}  + 用户名",
         "自己也要官方卡：点下方「开通官方核验」",
-    ])
+    ]
+    return "\n".join(head)
 
 
 async def send_card(message, ident: Identity, *, bot=None, bot_username: str = "", share: str = "") -> None:
