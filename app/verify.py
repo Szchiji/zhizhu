@@ -12,23 +12,28 @@ def _bot(name: str = "") -> str:
 
 def card_text(ident: Identity, *, watermark: bool = False, bot_username: str = "") -> str:
     bot = _bot(bot_username)
-    name = (ident.display_name or "—").strip()
-    uname = f"@{ident.username}" if ident.username else "—"
+    name = (ident.display_name or "未填姓名").strip()
+    uname = f"@{ident.username}" if ident.username else "未绑定用户名"
     uid = ident.official_user_id or "—"
     extra = (ident.card_text or "").strip()
     brand = brand_name()
     body = (
-        f"✅  {brand}  ·  官方登记\n"
-        f"via  @{bot}\n"
-        "━━━━━━━━━━━━━━\n"
-        f"{name}\n"
-        f"{uname}\n"
-        f"ID  {uid}\n"
-        "━━━━━━━━━━━━━━\n"
+        f"✅ {brand}官方认证\n"
+        f"本条由 @{bot} 出具，可当场复查\n"
+        "\n"
+        f"姓名   {name}\n"
+        f"账号   {uname}\n"
+        f"ID     {uid}\n"
     )
     if extra:
-        body += extra + "\n\n"
-    body += "此卡为平台官方登记，谨防仿冒。"
+        body += f"\n{extra}\n"
+    body += (
+        "\n"
+        "——————————\n"
+        "谨防仿冒：以本机器人实时查询为准\n"
+        f"群里输入  @{bot}  + 用户名\n"
+        "自己也要官方卡：点下方「开通官方核验」"
+    )
     return body
 
 
@@ -37,13 +42,17 @@ def promo_text(bot_name: str = "", name: str = "") -> str:
     brand = brand_name()
     if name:
         return (
-            f"@{name}  暂无官方登记\n\n"
-            f"{brand} 提供账号核验。\n"
-            f"开通后可生成 via @{bot} 的官方身份卡。"
+            f"@{name}  尚未在 {brand} 登记\n\n"
+            "看到别人自称官方？先在这里查一下。\n"
+            f"群里输入  @{bot}  + 用户名  实时出卡。\n\n"
+            "开通后，你的账号也会出现同样的官方认证卡，\n"
+            "别人点一下就能确认是你。"
         )
     return (
-        f"{brand}  ·  官方身份核验\n\n"
-        f"输入 @{bot} 加空格再加用户名即可出卡。"
+        f"{brand} · 官方身份核验\n\n"
+        f"群里输入  @{bot}  + 用户名\n"
+        "立刻看到是否已官方登记。\n\n"
+        "开通后自动出卡，防仿冒、帮你拉新。"
     )
 
 
@@ -73,10 +82,10 @@ def card_kb(ident: Identity, *, share_url: str = "", bot_username: str = "") -> 
     rows: list[list[InlineKeyboardButton]] = []
     row: list[InlineKeyboardButton] = []
     if ident.username:
-        row.append(InlineKeyboardButton("联系登记账号", url=f"https://t.me/{ident.username.lstrip('@')}"))
-    row.append(InlineKeyboardButton("继续查询", switch_inline_query_current_chat=""))
+        row.append(InlineKeyboardButton("联系他", url=f"https://t.me/{ident.username.lstrip('@')}"))
+    row.append(InlineKeyboardButton("再查一个", switch_inline_query_current_chat=""))
     rows.append(row)
-    rows.append([InlineKeyboardButton("开通官方核验", url=f"https://t.me/{bot}?start=pay")])
+    rows.append([InlineKeyboardButton("我也要官方认证", url=f"https://t.me/{bot}?start=pay")])
     return InlineKeyboardMarkup(rows)
 
 
