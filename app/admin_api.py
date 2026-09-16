@@ -52,6 +52,14 @@ def _dump_user(tenant: Tenant) -> dict:
     }
 
 
+def _days(body) -> int:
+    try:
+        days = int(float(body.get("days") or 365))
+    except (TypeError, ValueError):
+        days = 365
+    return max(1, min(days, 3650))
+
+
 def mount_admin(app) -> None:
     @app.post("/api/mini/cancel")
     async def mini_cancel(request: Request):
@@ -86,14 +94,7 @@ def mount_admin(app) -> None:
             for o in db.scalars(
                 select(Order).where(Order.rail == "usdt", Order.status.in_(("pending", "confirming"))).limit(30)
             ):
-                pending.append(
-                    {
-                        "code": o.public_code,
-                        "amount": f"{float(o.amount):g}",
-                        "status": o.status,
-                        "txid": o.txid or "",
-                    }
-                )
+                pending.append({"code": o.public_code, "amount": f"{float(o.amount):g}", "status": o.status, "txid": o.txid or ""})
             return {
                 "ok": True,
                 "board": price_board(db),
@@ -116,13 +117,7 @@ def mount_admin(app) -> None:
             rows: list[Tenant] = []
             if raw.isdigit():
                 tg = int(raw)
-                rows = list(
-                    db.scalars(
-                        select(Tenant).where(
-                            or_(Tenant.owner_tg_id == tg, Tenant.id == tg)
-                        )
-                    )
-                )
+                rows = list(db.scalars(select(Tenant).where(or_(Tenant.owner_tg_id == tg, Tenant.id == tg))))
                 ident = db.scalar(select(Identity).where(Identity.official_user_id == tg))
                 if ident:
                     t = db.get(Tenant, ident.tenant_id)
@@ -132,12 +127,7 @@ def mount_admin(app) -> None:
             if name:
                 idents = list(
                     db.scalars(
-                        select(Identity).where(
-                            or_(
-                                Identity.username.ilike(name),
-                                Identity.display_name.ilike(f"%{name}%"),
-                            )
-                        ).limit(20)
+                        select(Identity).where(or_(Identity.username.ilike(name), Identity.display_name.ilike(f"%{name}%"))).limit(20)
                     )
                 )
                 for ident in idents:
@@ -165,10 +155,7 @@ def mount_admin(app) -> None:
                     value = float(body.get("amount") or 0)
                 except (TypeError, ValueError):
                     raise HTTPException(400, "bad amount")
-                if rail == "stars":
-                    set_setting(db, "stars_year", str(int(value)))
-                else:
-                    set_setting(db, "usdt_year", f"{value:g}")
+                set_setting(db, "stars_year" if rail == "stars" else "usdt_year", str(int(value) if rail == "stars" else f"{value:g}"))
                 return {"ok": True, "board": price_board(db)}
             if action == "addr":
                 addr = str(body.get("address") or "").strip()
@@ -191,7 +178,7 @@ def mount_admin(app) -> None:
                 add_event(db, order, "paid", "mini_admin")
                 tenant = activate_order(db, order)
                 return {"ok": True, "paid_until": str(tenant.paid_until)}
-            if action == "user_add":
+            if action in {"user_add", "user_extend"}:
                 try:
                     tg_id = int(body.get("tg_id") or 0)
                 except (TypeError, ValueError):
@@ -207,20 +194,19 @@ def mount_admin(app) -> None:
                     ident.display_name = str(body.get("display_name"))[:64]
                 ident.official_user_id = ident.official_user_id or tg_id
                 db.add(ident)
+                days = _days(body)
                 if tenant.status != "owner":
                     tenant.status = "active"
-                    tenant.plan = "year"
-                    tenant.paid_until = utcnow() + timedelta(days=365)
+                    tenant.plan = "year" if days >= 360 else "custom"
+                    tenant.paid_until = utcnow() + timedelta(days=days)
                 db.commit()
-                return {"ok": True, "user": _dump_user(tenant)}
-            target = None
+                return {"ok": True, "user": _dump_user(tenant), "days": days}
             if action in {"user_block", "user_unblock", "user_delete"}:
                 try:
                     tg_id = int(body.get("tg_id") or 0)
                 except (TypeError, ValueError):
                     tg_id = 0
-                if tg_id:
-                    target = db.scalar(select(Tenant).where(Tenant.owner_tg_id == tg_id))
+                target = db.scalar(select(Tenant).where(Tenant.owner_tg_id == tg_id)) if tg_id else None
                 if not target and body.get("tenant_id"):
                     target = db.get(Tenant, int(body.get("tenant_id")))
                 if not target:
