@@ -115,6 +115,16 @@
         <div class="btns"><button class="ghost" onclick="setAddr()">保存地址</button><button class="ghost" onclick="toggleClone()" id="aclone">克隆</button></div>
       </div>
       <div class="card">
+        <h1>用户管理</h1>
+        <input id="uq" placeholder="@用户名 或 电报ID" />
+        <div class="btns"><button onclick="searchUsers()">搜索</button></div>
+        <div class="olist" id="ulist">输入后搜索</div>
+        <label>添加：电报ID</label><input id="atgid" placeholder="数字ID" />
+        <label>用户名</label><input id="auname" placeholder="username" />
+        <label>姓名</label><input id="aname" placeholder="对外姓名" />
+        <div class="btns"><button onclick="addUser()">添加并开通一年</button></div>
+      </div>
+      <div class="card">
         <h1>确认订单</h1>
         <div class="olist" id="apend">暂无待确认</div>
         <label>订单号</label><input id="acode" placeholder="VH-XXXXXX" />
@@ -211,6 +221,29 @@
         if(!j.orders||!j.orders.length){ el.textContent='暂无'; return; }
         el.innerHTML=j.orders.map(o=>'<div>'+o.created+' · '+o.rail+' · '+o.amount+' · '+o.status+(o.txid?(' · '+o.txid.slice(0,10)):'')+'</div>').join('');
       }catch(e){}
+    }
+    async function searchUsers(){
+      const q=document.getElementById('uq').value.trim();
+      try{
+        const j=await fetch('/api/mini/admin/users?q='+encodeURIComponent(q)+'&user_id='+(user&&user.id||'')+'&init_data='+encodeURIComponent(initData)).then(r=>r.json());
+        if(j.error){ show(err,j.error); return; }
+        const el=document.getElementById('ulist');
+        if(!j.users||!j.users.length){ el.textContent='未找到'; return; }
+        el.innerHTML=j.users.map(u=>'<div>@'+(u.username||'-')+' · '+(u.display_name||'')+' · '+u.tg_id+' · '+u.status+' · '+(u.paid_until||'')+
+          '<br><button class="ghost" style="margin-top:6px" onclick="userAct(\'user_block\','+u.tg_id+')">拉黑</button>'+
+          '<button class="ghost" onclick="userAct(\'user_unblock\','+u.tg_id+')">解除</button>'+
+          '<button class="ghost" onclick="userAct(\'user_delete\','+u.tg_id+')">删除</button></div>').join('');
+      }catch(e){ show(err,e.message); }
+    }
+    async function addUser(){
+      try{
+        await api('/api/mini/admin',{action:'user_add',tg_id:document.getElementById('atgid').value,username:document.getElementById('auname').value,display_name:document.getElementById('aname').value});
+        show(ok,'已添加并开通一年'); searchUsers();
+      }catch(e){ show(err,e.message); }
+    }
+    async function userAct(action,tg_id){
+      try{ await api('/api/mini/admin',{action:action,tg_id:tg_id}); show(ok,'已处理'); searchUsers(); }
+      catch(e){ show(err,e.message); }
     }
     async function loadAdmin(){
       try{
