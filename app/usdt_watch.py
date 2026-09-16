@@ -3,16 +3,16 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
-from datetime import timedelta
+from types import SimpleNamespace
 
 import httpx
 from sqlalchemy import select
 
 from app.config import USDT_ADDRESS, USDT_CHAIN
 from app.db import get_session
-from app.models import Order, Tenant, utcnow
+from app.models import Order, utcnow
 from app.plans import PLANS
-from app.services import activate_order, add_event, get_setting
+from app.services import activate_order, add_event, get_setting, save_paid_profile
 
 log = logging.getLogger("zhizhu.usdt")
 USDT_CONTRACT = "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t"
@@ -40,6 +40,17 @@ def _usdt_amount(row: dict) -> float:
         return int(row.get("value") or 0) / 1_000_000
     except (TypeError, ValueError):
         return 0.0
+
+
+async def _profile_from_bot(bot, tg_id: int):
+    try:
+        chat = await bot.get_chat(tg_id)
+    except Exception:
+        return SimpleNamespace(id=tg_id, username=None, full_name="")
+    name = getattr(chat, "full_name", "") or " ".join(
+        x for x in (getattr(chat, "first_name", None), getattr(chat, "last_name", None)) if x
+    )
+    return SimpleNamespace(id=tg_id, username=getattr(chat, "username", None), full_name=name)
 
 
 async def check_once(bot=None) -> int:
@@ -94,19 +105,24 @@ async def check_once(bot=None) -> int:
             match.txid = txid
             add_event(db, match, "paid", "trongrid_auto")
             tenant = activate_order(db, match)
+            user = await _profile_from_bot(bot, tenant.owner_tg_id) if bot else SimpleNamespace(
+                id=tenant.owner_tg_id, username=None, full_name=""
+            )
+            save_paid_profile(db, tenant, user)
             pending.remove(match)
             used.add(txid)
             activated += 1
             if bot and tenant:
                 label = PLANS.get(match.plan, {}).get("label", match.plan)
+                uname = f"@{user.username}" if user.username else "未设用户名"
                 try:
                     await bot.send_message(
                         chat_id=tenant.owner_tg_id,
                         text=(
-                            f"已收到 {paid:g} USDT\n"
-                            f"订单 {match.public_code} · {label}\n"
-                            f"已开通至 {tenant.paid_until}\n"
-                            f"txid `{txid[:16]}...`"
+                            f"已收到 {paid:g} USDT，{label}已开通至 {tenant.paid_until}\n\n"
+                            f"已按你的 Telegram 账号生成登记\n"
+                            f"账号 {uname}\nID {tenant.owner_tg_id}\n\n"
+                            "需改名字或身份卡再发 /setname /setcard"
                         ),
                     )
                 except Exception as exc:
