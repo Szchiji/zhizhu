@@ -7,12 +7,12 @@ from sqlalchemy import select
 from app.config import ADMIN_TG_IDS, USDT_ADDRESS
 from app.db import get_session
 from app.models import Order
-from app.plans import PLANS, clone_on, plan_stars, plan_usdt, price_board, set_clone
-from app.services import activate_order, add_event, get_setting, set_setting
+from app.plans import clone_on, plan_stars, plan_usdt, price_board, set_clone
+from app.services import activate_order, add_event, get_or_create_tenant, get_setting, open_order, set_setting
 from app.tg_webapp import user_id_from_init
 
 
-def _admin_id(body: dict | None = None, user_id: int = 0, init_data: str = "") -> int:
+def _uid(body: dict | None = None, user_id: int = 0, init_data: str = "") -> int:
     uid = 0
     if init_data:
         uid = user_id_from_init(init_data)
@@ -25,12 +25,40 @@ def _admin_id(body: dict | None = None, user_id: int = 0, init_data: str = "") -
                 uid = 0
     if not uid:
         uid = int(user_id or 0)
+    return uid
+
+
+def _admin_id(body: dict | None = None, user_id: int = 0, init_data: str = "") -> int:
+    uid = _uid(body, user_id, init_data)
     if uid not in ADMIN_TG_IDS:
         return 0
     return uid
 
 
 def mount_admin(app) -> None:
+    @app.post("/api/mini/cancel")
+    async def mini_cancel(request: Request):
+        body = await request.json()
+        uid = _uid(body)
+        if not uid:
+            return JSONResponse({"error": "未登录"}, status_code=401)
+        db = get_session()
+        try:
+            tenant = get_or_create_tenant(db, uid)
+            code = str(body.get("code") or "").upper()
+            order = None
+            if code:
+                order = db.scalar(select(Order).where(Order.public_code == code, Order.tenant_id == tenant.id))
+            if not order:
+                order = open_order(db, tenant.id)
+            if not order or order.status not in {"pending", "confirming", "draft"}:
+                return JSONResponse({"error": "没有可取消的订单"}, status_code=400)
+            add_event(db, order, "canceled", "user_cancel")
+            db.commit()
+            return {"ok": True, "code": order.public_code}
+        finally:
+            db.close()
+
     @app.get("/api/mini/admin")
     async def admin_board(user_id: int = 0, init_data: str = ""):
         if not _admin_id(user_id=user_id, init_data=init_data):
