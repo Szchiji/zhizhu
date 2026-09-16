@@ -22,15 +22,18 @@
     button { flex:1; border:0; border-radius:12px; padding:12px 10px; font-size:14px; font-weight:600; color:#fff; }
     .stars { background:var(--blue); }
     .usdt { background:#0f766e; }
+    button:disabled { opacity:.5; }
     .how { margin:8px 16px 40px; padding:16px; border-radius:18px; background:#111827; color:var(--muted); font-size:13px; line-height:1.7; }
+    .err { display:none; margin:0 16px 16px; padding:12px; border-radius:12px; background:#7f1d1d; color:#fecaca; font-size:13px; }
   </style>
 </head>
 <body>
   <div class="top">
     <div class="eyebrow">ZHIZHU VERIFY</div>
     <h1>开通官方核验</h1>
-    <p class="sub">开通后可在机器人保存身份资料。未开通也可查询已登记账号。</p>
+    <p class="sub">选套餐即可支付。未开通也可在机器人里查已登记账号。</p>
   </div>
+  <div id="err" class="err"></div>
   <div class="list">
     {% for p in plans %}
     <div class="card">
@@ -38,24 +41,48 @@
       <div class="muted">{{ p.days_text }}</div>
       <div class="price">{{ p.stars }}⭐  或  {{ p.usdt }} USDT</div>
       <div class="btns">
-        <button class="stars" onclick="pay('{{ p.key }}','stars')">Stars 支付</button>
-        <button class="usdt" onclick="pay('{{ p.key }}','usdt')">USDT 支付</button>
+        <button class="stars" onclick="pay(this,'{{ p.key }}','stars')">Stars 支付</button>
+        <button class="usdt" onclick="pay(this,'{{ p.key }}','usdt')">USDT 支付</button>
       </div>
     </div>
     {% endfor %}
   </div>
   <div class="how">
-    使用方法<br>
-    1. 查询：发送对方 @用户名，或在其他对话输入 @{{ bot }} 加空格<br>
-    2. 开通：在本页选择套餐<br>
-    3. 登记：支付成功后按提示保存姓名与账号
+    查询：回机器人发送 @用户名<br>
+    登记：付款成功后按提示保存资料
   </div>
   <script>
     const tg = window.Telegram.WebApp;
     tg.ready(); tg.expand();
-    function pay(plan, rail) {
-      tg.sendData(JSON.stringify({ plan: plan, rail: rail }));
-      tg.close();
+    const err = document.getElementById('err');
+    function show(msg) { err.style.display = 'block'; err.textContent = msg; }
+    async function pay(btn, plan, rail) {
+      const user = tg.initDataUnsafe && tg.initDataUnsafe.user;
+      if (!user || !user.id) { show('请从蜘蛛左下角「开通套餐」打开本页'); return; }
+      btn.disabled = true;
+      try {
+        const r = await fetch('/api/mini/order', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ user_id: user.id, plan: plan, rail: rail })
+        });
+        const j = await r.json();
+        if (!r.ok || j.error) { show(j.error || '下单失败'); btn.disabled = false; return; }
+        if (j.invoice && tg.openInvoice) {
+          tg.openInvoice(j.invoice, function (st) {
+            if (st === 'paid') tg.close();
+            else btn.disabled = false;
+          });
+        } else if (j.url) {
+          tg.openLink(j.url);
+        } else {
+          show('未返回支付入口');
+          btn.disabled = false;
+        }
+      } catch (e) {
+        show('网络异常，请重试');
+        btn.disabled = false;
+      }
     }
   </script>
 </body>
