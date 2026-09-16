@@ -40,20 +40,32 @@ def card_text(ident: Identity, *, watermark: bool = False, bot_username: str = "
 def promo_text(bot_name: str = "", name: str = "") -> str:
     bot = _bot(bot_name)
     brand = brand_name()
-    head = [
+    lines = [
         f"✅  {brand}官方核验",
         "━━━━━━━━━━━━",
         f"来源：@{bot}",
         "━━━━━━━━━━━━",
     ]
     if name:
-        head += [f"@{name}  尚未登记", "━━━━━━━━━━━━"]
-    head += [
+        lines += [f"@{name}  尚未登记", "━━━━━━━━━━━━"]
+    lines += [
         "谨防仿冒：以本机器人实时查询为准",
         f"任何输入框内输入：  @{bot}  + 用户名",
         "自己也要官方卡：点下方「开通官方核验」",
     ]
-    return "\n".join(head)
+    return "\n".join(lines)
+
+
+def card_kb(ident: Identity | None = None, *, share_url: str = "", bot_username: str = "", username: str = "") -> InlineKeyboardMarkup:
+    bot = _bot(bot_username)
+    uname = username or (ident.username if ident else "") or ""
+    uname = uname.lstrip("@")
+    rows: list[list[InlineKeyboardButton]] = []
+    if uname:
+        rows.append([InlineKeyboardButton("联系他", url=f"https://t.me/{uname}")])
+    rows.append([InlineKeyboardButton("再查一个", switch_inline_query_current_chat="")])
+    rows.append([InlineKeyboardButton("我也要官方认证", url=f"https://t.me/{bot}?start=pay")])
+    return InlineKeyboardMarkup(rows)
 
 
 async def send_card(message, ident: Identity, *, bot=None, bot_username: str = "", share: str = "") -> None:
@@ -75,18 +87,6 @@ def alert_text(ident: Identity) -> str:
     uid = ident.official_user_id or ""
     uname = f"@{ident.username}" if ident.username else ""
     return f"{text}\n{uname}  {uid}".strip()[:200]
-
-
-def card_kb(ident: Identity, *, share_url: str = "", bot_username: str = "") -> InlineKeyboardMarkup:
-    bot = _bot(bot_username)
-    rows: list[list[InlineKeyboardButton]] = []
-    row: list[InlineKeyboardButton] = []
-    if ident.username:
-        row.append(InlineKeyboardButton("联系他", url=f"https://t.me/{ident.username.lstrip('@')}"))
-    row.append(InlineKeyboardButton("再查一个", switch_inline_query_current_chat=""))
-    rows.append(row)
-    rows.append([InlineKeyboardButton("我也要官方认证", url=f"https://t.me/{bot}?start=pay")])
-    return InlineKeyboardMarkup(rows)
 
 
 def share_url(bot_name: str, tenant_id: int) -> str:
