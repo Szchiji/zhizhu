@@ -35,7 +35,7 @@ async def on_inline(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         body = promo_text(bot_name, name)
         markup = InlineKeyboardMarkup(
             [
-                [InlineKeyboardButton("打开工作台", url=f"https://t.me/{bot_name}?start={'q_'+name if name else 'ask'}")],
+                [InlineKeyboardButton("查询更多", url=f"https://t.me/{bot_name}?start={'q_'+name if name else 'ask'}")],
                 [InlineKeyboardButton("开通官方核验", url=f"https://t.me/{bot_name}?start=pay")],
             ]
         )
