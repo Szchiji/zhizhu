@@ -2,17 +2,22 @@ from __future__ import annotations
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
+from app.config import BOT_USERNAME, BRAND_NAME
 from app.models import Identity
 
 
+def _bot(name: str = "") -> str:
+    return (name or BOT_USERNAME or "zhizhusp_bot").lstrip("@")
+
+
 def card_text(ident: Identity, *, watermark: bool = False, bot_username: str = "") -> str:
-    bot = (bot_username or "zhizhusp_bot").lstrip("@")
+    bot = _bot(bot_username)
     name = ident.display_name or "—"
     uname = f"@{ident.username}" if ident.username else "—"
     uid = ident.official_user_id or "—"
     extra = (ident.card_text or "").strip()
     body = (
-        "✅  蜘蛛官方核验\n"
+        f"✅  {BRAND_NAME}官方核验\n"
         f"来源  @{bot}\n"
         "━━━━━━━━━━━━\n"
         f"姓名    {name}\n"
@@ -30,15 +35,15 @@ def card_text(ident: Identity, *, watermark: bool = False, bot_username: str = "
 
 
 def promo_text(bot_username: str = "", name: str = "") -> str:
-    bot = (bot_username or "zhizhusp_bot").lstrip("@")
+    bot = _bot(bot_username)
     if name:
         return (
             f"@{name} 暂无官方登记\n\n"
-            "蜘蛛提供账号核验，避免被仿冒。\n"
+            f"{BRAND_NAME}提供账号核验，避免被仿冒。\n"
             f"开通后可生成带 @{bot} 来源标识的官方卡。"
         )
     return (
-        "蜘蛛 · 官方身份核验\n\n"
+        f"{BRAND_NAME} · 官方身份核验\n\n"
         "在输入框输入要查的 @用户名，即可出官方登记卡。\n"
         "开通后自己的账号也可生成同样的认证卡。"
     )
@@ -51,8 +56,7 @@ async def send_card(message, ident: Identity, *, bot=None, bot_username: str = "
         try:
             photos = await bot.get_user_profile_photos(ident.official_user_id, limit=1)
             if photos.total_count:
-                file_id = photos.photos[0][-1].file_id
-                await message.reply_photo(file_id, caption=text[:1024], reply_markup=kb)
+                await message.reply_photo(photos.photos[0][-1].file_id, caption=text[:1024], reply_markup=kb)
                 return
         except Exception:
             pass
@@ -60,14 +64,14 @@ async def send_card(message, ident: Identity, *, bot=None, bot_username: str = "
 
 
 def alert_text(ident: Identity) -> str:
-    text = ident.alert_text or "此为蜘蛛官方登记账号"
+    text = ident.alert_text or f"此为{BRAND_NAME}官方登记账号"
     uid = ident.official_user_id or ""
     uname = f"@{ident.username}" if ident.username else ""
     return f"{text}\n{uname}  {uid}".strip()[:200]
 
 
 def card_kb(ident: Identity, *, share_url: str = "", bot_username: str = "") -> InlineKeyboardMarkup:
-    bot = (bot_username or "zhizhusp_bot").lstrip("@")
+    bot = _bot(bot_username)
     rows: list[list[InlineKeyboardButton]] = []
     row: list[InlineKeyboardButton] = []
     if ident.username:
@@ -79,18 +83,17 @@ def card_kb(ident: Identity, *, share_url: str = "", bot_username: str = "") -> 
 
 
 def share_url(bot_username: str, tenant_id: int) -> str:
-    if not bot_username:
+    bot = _bot(bot_username)
+    if not bot:
         return ""
-    return f"https://t.me/{bot_username.lstrip('@')}?start=v{tenant_id}"
+    return f"https://t.me/{bot}?start=v{tenant_id}"
 
 
 def extract_forward(msg):
     src_id = None
     src_name = "未知"
     if getattr(msg, "forward_from", None):
-        src_id = msg.forward_from.id
-        src_name = msg.forward_from.full_name
-        return src_id, src_name
+        return msg.forward_from.id, msg.forward_from.full_name
     origin = getattr(msg, "forward_origin", None)
     if origin is not None:
         user = getattr(origin, "sender_user", None)
