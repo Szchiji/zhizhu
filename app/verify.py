@@ -12,26 +12,23 @@ def _bot(name: str = "") -> str:
 
 def card_text(ident: Identity, *, watermark: bool = False, bot_username: str = "") -> str:
     bot = _bot(bot_username)
-    name = ident.display_name or "—"
+    name = (ident.display_name or "—").strip()
     uname = f"@{ident.username}" if ident.username else "—"
     uid = ident.official_user_id or "—"
     extra = (ident.card_text or "").strip()
     brand = brand_name()
     body = (
-        f"✅  {brand}官方核验\n"
-        f"来源  @{bot}\n"
-        "━━━━━━━━━━━━\n"
-        f"姓名    {name}\n"
-        f"账号    {uname}\n"
-        f"ID      {uid}\n"
-        "━━━━━━━━━━━━\n"
+        f"✅  {brand}  ·  官方登记\n"
+        f"via  @{bot}\n"
+        "━━━━━━━━━━━━━━\n"
+        f"{name}\n"
+        f"{uname}\n"
+        f"ID  {uid}\n"
+        "━━━━━━━━━━━━━━\n"
     )
     if extra:
         body += extra + "\n\n"
-    body += (
-        "以上为官方登记，请谨防仿冒。\n"
-        f"查其他人：输入 @{bot} 加空格再加用户名"
-    )
+    body += "此卡为平台官方登记，谨防仿冒。"
     return body
 
 
@@ -40,14 +37,13 @@ def promo_text(bot_name: str = "", name: str = "") -> str:
     brand = brand_name()
     if name:
         return (
-            f"@{name} 暂无官方登记\n\n"
-            f"{brand}提供账号核验，避免被仿冒。\n"
-            f"开通后可生成带 @{bot} 来源标识的官方卡。"
+            f"@{name}  暂无官方登记\n\n"
+            f"{brand} 提供账号核验。\n"
+            f"开通后可生成 via @{bot} 的官方身份卡。"
         )
     return (
-        f"{brand} · 官方身份核验\n\n"
-        "在输入框输入要查的 @用户名，即可出官方登记卡。\n"
-        "开通后自己的账号也可生成同样的认证卡。"
+        f"{brand}  ·  官方身份核验\n\n"
+        f"输入 @{bot} 加空格再加用户名即可出卡。"
     )
 
 
