@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 import secrets
 from datetime import datetime, timedelta, timezone
+from types import SimpleNamespace
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import select
@@ -17,7 +18,6 @@ SKIP_NAMES = {
     "http",
     "www",
     "telegram",
-    "zhizhusp_bot",
     "start",
     "join",
 }
@@ -48,7 +48,7 @@ def get_or_create_tenant(db: Session, owner_tg_id: int) -> Tenant:
         tenant = Tenant(owner_tg_id=owner_tg_id, status="unpaid", plan=PLAN_DEFAULT)
     db.add(tenant)
     db.flush()
-    db.add(Identity(tenant_id=tenant.id, alert_text="此为官方登记账号"))
+    db.add(Identity(tenant_id=tenant.id, alert_text="此为官方登记账号", official_user_id=owner_tg_id))
     db.commit()
     db.refresh(tenant)
     return tenant
@@ -114,24 +114,26 @@ def find_paid_identity(db: Session, username: str) -> Identity | None:
     return None
 
 
-def save_paid_profile(db: Session, tenant: Tenant, user) -> Identity:
+def save_paid_profile(db: Session, tenant: Tenant, user=None) -> Identity:
     ident = db.scalar(select(Identity).where(Identity.tenant_id == tenant.id))
     if not ident:
         ident = Identity(tenant_id=tenant.id, alert_text="此为官方登记账号")
         db.add(ident)
-    if user:
-        uname = getattr(user, "username", None)
-        if uname:
-            ident.username = str(uname).lstrip("@")[:32]
-        uid = getattr(user, "id", None)
-        if uid:
-            try:
-                ident.official_user_id = int(uid)
-            except (TypeError, ValueError):
-                pass
-        name = getattr(user, "full_name", None) or ""
-        if name and not ident.display_name:
-            ident.display_name = str(name).strip()[:64]
+    uid = getattr(user, "id", None) if user is not None else None
+    if not uid:
+        uid = tenant.owner_tg_id
+    try:
+        ident.official_user_id = int(uid)
+    except (TypeError, ValueError):
+        pass
+    uname = getattr(user, "username", None) if user is not None else None
+    if uname:
+        ident.username = str(uname).lstrip("@")[:32]
+    name = ""
+    if user is not None:
+        name = getattr(user, "full_name", None) or getattr(user, "first_name", None) or ""
+    if name and not (ident.display_name or "").strip():
+        ident.display_name = str(name).strip()[:64]
     db.commit()
     db.refresh(ident)
     return ident
@@ -208,5 +210,5 @@ def activate_order(db: Session, order: Order) -> Tenant:
     order.period_start = base
     order.period_end = period_end
     add_event(db, order, "active", "entitlement_granted")
-    db.commit()
+    save_paid_profile(db, tenant, SimpleNamespace(id=tenant.owner_tg_id, username=None, full_name=""))
     return tenant
