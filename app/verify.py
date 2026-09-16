@@ -10,50 +10,55 @@ def _bot(name: str = "") -> str:
     return (name or bot_username()).lstrip("@")
 
 
+def _row(label: str, value: str) -> str:
+    return f"{label}    {value}"
+
+
 def card_text(ident: Identity, *, watermark: bool = False, bot_username: str = "") -> str:
     bot = _bot(bot_username)
     name = (ident.display_name or "未填姓名").strip()
-    uname = f"@{ident.username}" if ident.username else "未绑定用户名"
-    uid = ident.official_user_id or "—"
+    uname = f"@{ident.username}" if ident.username else "未绑定"
+    uid = str(ident.official_user_id or "—")
     extra = (ident.card_text or "").strip()
     brand = brand_name()
-    body = (
-        f"✅ {brand}官方认证\n"
-        f"本条由 @{bot} 出具，可当场复查\n"
-        "\n"
-        f"姓名   {name}\n"
-        f"账号   {uname}\n"
-        f"ID     {uid}\n"
-    )
+    lines = [
+        f"✅  {brand}官方认证",
+        "",
+        _row("姓名", name),
+        _row("账号", uname),
+        _row("ID  ", uid),
+    ]
     if extra:
-        body += f"\n{extra}\n"
-    body += (
-        "\n"
-        "——————————\n"
-        "谨防仿冒：以本机器人实时查询为准\n"
-        f"群里输入  @{bot}  + 用户名\n"
-        "自己也要官方卡：点下方「开通官方核验」"
-    )
-    return body
+        lines += ["", extra]
+    lines += [
+        "",
+        "────────────",
+        _row("出具", f"@{bot}"),
+        _row("复查", f"@{bot} + 用户名"),
+        _row("开通", "点下方按钮"),
+    ]
+    return "\n".join(lines)
 
 
 def promo_text(bot_name: str = "", name: str = "") -> str:
     bot = _bot(bot_name)
     brand = brand_name()
     if name:
-        return (
-            f"@{name}  尚未在 {brand} 登记\n\n"
-            "看到别人自称官方？先在这里查一下。\n"
-            f"群里输入  @{bot}  + 用户名  实时出卡。\n\n"
-            "开通后，你的账号也会出现同样的官方认证卡，\n"
-            "别人点一下就能确认是你。"
-        )
-    return (
-        f"{brand} · 官方身份核验\n\n"
-        f"群里输入  @{bot}  + 用户名\n"
-        "立刻看到是否已官方登记。\n\n"
-        "开通后自动出卡，防仿冒、帮你拉新。"
-    )
+        return "\n".join([
+            f"@{name}  尚未登记",
+            "",
+            f"{brand} 官方核验",
+            _row("查询", f"@{bot} + 用户名"),
+            _row("开通", "点下方按钮"),
+            "",
+            "开通后自动出官方认证卡，防仿冒。",
+        ])
+    return "\n".join([
+        f"{brand} · 官方身份核验",
+        "",
+        _row("查询", f"@{bot} + 用户名"),
+        _row("开通", "点下方按钮"),
+    ])
 
 
 async def send_card(message, ident: Identity, *, bot=None, bot_username: str = "", share: str = "") -> None:
