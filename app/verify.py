@@ -25,6 +25,21 @@ def card_text(ident: Identity, *, watermark: bool = False, bot_username: str = "
     return body
 
 
+async def send_card(message, ident: Identity, *, bot=None, bot_username: str = "", share: str = "") -> None:
+    text = card_text(ident, bot_username=bot_username)
+    kb = card_kb(ident, share_url=share, bot_username=bot_username)
+    if bot and ident.official_user_id:
+        try:
+            photos = await bot.get_user_profile_photos(ident.official_user_id, limit=1)
+            if photos.total_count:
+                file_id = photos.photos[0][-1].file_id
+                await message.reply_photo(file_id, caption=text[:1024], reply_markup=kb)
+                return
+        except Exception:
+            pass
+    await message.reply_text(text, reply_markup=kb)
+
+
 def alert_text(ident: Identity) -> str:
     text = ident.alert_text or "此为官方登记账号"
     uid = ident.official_user_id or ""
