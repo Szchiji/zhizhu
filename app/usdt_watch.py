@@ -14,7 +14,7 @@ from app.config import USDT_ADDRESS, USDT_CHAIN
 from app.db import get_session
 from app.models import Order, Tenant, utcnow
 from app.plans import PLANS
-from app.services import activate_order, add_event, get_setting, save_paid_profile, set_setting
+from app.services import activate_order, add_event, fmt_until, get_setting, save_paid_profile, set_setting
 
 log = logging.getLogger("zhizhu.usdt")
 USDT_CONTRACT = "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t"
@@ -91,7 +91,7 @@ async def remind_expiring(bot) -> None:
                 continue
             set_setting(db, key, "1")
             left = max(0, (tenant.paid_until - now).days)
-            until = tenant.paid_until.strftime("%Y-%m-%d %H:%M")
+            until = fmt_until(tenant.paid_until)
             text = tmpl.replace("{until}", until).replace("{days}", str(left))
             try:
                 await bot.send_message(chat_id=tenant.owner_tg_id, text=text)
@@ -167,7 +167,7 @@ async def check_once(bot=None) -> int:
                     await bot.send_message(
                         chat_id=tenant.owner_tg_id,
                         text=(
-                            f"已收到 {paid:g} USDT，{label}已开通至 {tenant.paid_until}\n\n"
+                            f"已收到 {paid:g} USDT，{label}已开通至 {fmt_until(tenant.paid_until)}\n\n"
                             f"账号 {uname}\nID {tenant.owner_tg_id}"
                         ),
                     )
