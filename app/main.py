@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 from contextlib import asynccontextmanager
 from datetime import timedelta
@@ -27,6 +28,7 @@ from app.plans import PLANS, plan_stars, plan_usdt
 from app.platform_bot import build_platform_app
 from app.services import activate_order, add_event, get_or_create_tenant, get_setting, new_code, open_order
 from app.tenant_bot import handle_tenant_update
+from app.usdt_watch import watch_loop
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("zhizhu")
@@ -53,6 +55,7 @@ def _drop_open_orders(db, tenant_id: int) -> None:
 async def lifespan(app: FastAPI):
     global platform_app
     init_db()
+    watcher = None
     if not PLATFORM_BOT_TOKEN:
         log.warning("PLATFORM_BOT_TOKEN missing")
         yield
@@ -77,7 +80,10 @@ async def lifespan(app: FastAPI):
             )
         except Exception as exc:
             log.warning("menu button failed: %s", exc)
+    watcher = asyncio.create_task(watch_loop(platform_app.bot))
     yield
+    if watcher:
+        watcher.cancel()
     if platform_app:
         await platform_app.stop()
         await platform_app.shutdown()
