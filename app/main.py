@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import logging
 from contextlib import asynccontextmanager
+from datetime import timedelta
 
+import httpx
 from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse
 from fastapi.templating import Jinja2Templates
@@ -20,10 +22,10 @@ from app.config import (
 )
 from app.crypto_token import decrypt_token
 from app.db import get_session, init_db
-from app.models import Order, Tenant
+from app.models import Order, Tenant, utcnow
 from app.plans import PLANS, plan_stars, plan_usdt
 from app.platform_bot import build_platform_app
-from app.services import activate_order, add_event
+from app.services import activate_order, add_event, get_or_create_tenant, get_setting, new_code, open_order
 from app.tenant_bot import handle_tenant_update
 
 logging.basicConfig(level=logging.INFO)
@@ -35,12 +37,6 @@ platform_app = None
 def _days_text(days: int) -> str:
     if days >= 10000:
         return "长期有效"
-    if days == 15:
-        return "15 天"
-    if days == 90:
-        return "90 天"
-    if days == 365:
-        return "365 天"
     return f"{days} 天"
 
 
@@ -61,12 +57,7 @@ async def lifespan(app: FastAPI):
             url=url,
             secret_token=WEBHOOK_SECRET,
             drop_pending_updates=False,
-            allowed_updates=[
-                "message",
-                "callback_query",
-                "inline_query",
-                "pre_checkout_query",
-            ],
+            allowed_updates=["message", "callback_query", "inline_query", "pre_checkout_query"],
         )
         log.info("platform webhook %s", url)
     mini = f"{(PUBLIC_BASE_URL or WEBHOOK_BASE_URL or '').rstrip('/')}/mini"
@@ -105,22 +96,97 @@ async def root():
 async def mini(request: Request):
     db = get_session()
     try:
-        plans = []
-        for key, meta in PLANS.items():
-            plans.append(
-                {
-                    "key": key,
-                    "label": meta["label"],
-                    "days_text": _days_text(meta["days"]),
-                    "stars": plan_stars(db, key),
-                    "usdt": f"{plan_usdt(db, key):g}",
-                }
+        plans = [
+            {
+                "key": key,
+                "label": meta["label"],
+                "days_text": _days_text(meta["days"]),
+                "stars": plan_stars(db, key),
+                "usdt": f"{plan_usdt(db, key):g}",
+            }
+            for key, meta in PLANS.items()
+        ]
+        return templates.TemplateResponse(request, "mini.html", {"plans": plans, "bot": "zhizhusp_bot"})
+    finally:
+        db.close()
+
+
+@app.post("/api/mini/order")
+async def mini_order(request: Request):
+    body = await request.json()
+    try:
+        user_id = int(body.get("user_id") or 0)
+    except (TypeError, ValueError):
+        user_id = 0
+    key = str(body.get("plan") or "")
+    rail = str(body.get("rail") or "stars")
+    if not user_id or key not in PLANS:
+        raise HTTPException(400, detail="bad plan")
+    if not PLATFORM_BOT_TOKEN:
+        raise HTTPException(503, detail="bot not ready")
+    db = get_session()
+    try:
+        tenant = get_or_create_tenant(db, user_id)
+        if open_order(db, tenant.id):
+            return JSONResponse({"error": "已有待支付订单，请先完成或等待过期"}, status_code=409)
+        if rail == "usdt":
+            addr = get_setting(db, "usdt_address", USDT_ADDRESS)
+            if not addr:
+                return JSONResponse({"error": "尚未配置 USDT 地址"}, status_code=400)
+            code = new_code()
+            url = f"{(PUBLIC_BASE_URL or WEBHOOK_BASE_URL).rstrip('/')}/pay/usdt/{code}"
+            amount = plan_usdt(db, key)
+            db.add(
+                Order(
+                    public_code=code,
+                    tenant_id=tenant.id,
+                    rail="usdt",
+                    plan=key,
+                    period_days=PLANS[key]["days"],
+                    amount=amount,
+                    currency="USDT",
+                    chain=USDT_CHAIN,
+                    pay_url=url,
+                    pay_address=addr,
+                    status="pending",
+                    expires_at=utcnow() + timedelta(minutes=20),
+                )
             )
-        return templates.TemplateResponse(
-            request,
-            "mini.html",
-            {"plans": plans, "bot": "zhizhusp_bot"},
+            db.commit()
+            return {"ok": True, "url": url}
+        price = plan_stars(db, key)
+        payload = f"stars:{key}:{tenant.id}:{new_code()}"
+        db.add(
+            Order(
+                public_code=new_code(),
+                tenant_id=tenant.id,
+                rail="stars",
+                plan=key,
+                period_days=PLANS[key]["days"],
+                amount=price,
+                currency="XTR",
+                status="pending",
+                payload=payload,
+                expires_at=utcnow() + timedelta(hours=24),
+            )
         )
+        db.commit()
+        async with httpx.AsyncClient(timeout=20) as client:
+            r = await client.post(
+                f"https://api.telegram.org/bot{PLATFORM_BOT_TOKEN}/createInvoiceLink",
+                json={
+                    "title": f"蜘蛛核验·{PLANS[key]['label']}",
+                    "description": "开通后可保存官方资料",
+                    "payload": payload,
+                    "provider_token": "",
+                    "currency": "XTR",
+                    "prices": [{"label": PLANS[key]["label"], "amount": price}],
+                },
+            )
+            data = r.json()
+        if not data.get("ok"):
+            return JSONResponse({"error": data.get("description", "无法创建 Stars 账单")}, status_code=400)
+        return {"ok": True, "invoice": data["result"]}
     finally:
         db.close()
 
