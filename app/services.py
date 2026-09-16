@@ -75,6 +75,31 @@ def get_setting(db: Session, key: str, default: str = "") -> str:
     return row.value if row and row.value != "" else default
 
 
+def watch_key(viewer_tg_id: int) -> str:
+    return f"watch:{viewer_tg_id}"
+
+
+def set_watch(db: Session, viewer_tg_id: int, tenant_id: int) -> None:
+    set_setting(db, watch_key(viewer_tg_id), str(tenant_id))
+
+
+def get_watch_tenant(db: Session, viewer_tg_id: int) -> Tenant | None:
+    raw = get_setting(db, watch_key(viewer_tg_id), "")
+    if not raw.isdigit():
+        return None
+    return db.get(Tenant, int(raw))
+
+
+def find_tenant_by_username(db: Session, username: str) -> Tenant | None:
+    name = username.lstrip("@").strip()
+    if not name:
+        return None
+    ident = db.scalar(select(Identity).where(Identity.username.ilike(name)))
+    if ident:
+        return db.get(Tenant, ident.tenant_id)
+    return db.scalar(select(Tenant).where(Tenant.bot_username.ilike(name)))
+
+
 def set_setting(db: Session, key: str, value: str) -> None:
     row = db.get(Setting, key)
     if row:
