@@ -12,6 +12,7 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy import select
 from telegram import Bot, MenuButtonWebApp, Update, WebAppInfo
 
+from app.admin_api import mount_admin
 from app.config import (
     ADMIN_TG_IDS,
     PLATFORM_BOT_TOKEN,
@@ -113,6 +114,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Zhizhu VerifyHub", lifespan=lifespan)
+mount_admin(app)
 
 
 def _check_secret(secret: str | None) -> None:
