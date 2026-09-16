@@ -65,16 +65,19 @@ def tenant_usable(tenant: Tenant, at: datetime | None = None) -> bool:
 
 def parse_username(text: str) -> str:
     raw = (text or "").strip()
-    if re.search(r"https?://|t\.me/", raw, re.I):
-        m = re.search(r"@([A-Za-z][A-Za-z0-9_]{3,31})", raw)
-        name = m.group(1) if m else ""
+    if not raw:
+        return ""
+    found = re.search(r"@([A-Za-z][A-Za-z0-9_]{3,31})", raw)
+    if found:
+        name = found.group(1)
         return "" if name.lower() in SKIP_NAMES else name
-    for prefix in ("核验", "查询", "verify", "q_"):
+    if re.search(r"https?://|t\.me/", raw, re.I):
+        return ""
+    for prefix in ("核验", "查询", "verify"):
         if raw.lower().startswith(prefix):
-            raw = raw[len(prefix) :].strip()
-    raw = raw.lstrip("@")
+            raw = raw[len(prefix):].strip()
     token = re.split(r"[\s/?=&]+", raw)[0] if raw else ""
-    token = token.strip("@")
+    token = token.lstrip("@")
     if not USER_RE.fullmatch(token) or token.lower() in SKIP_NAMES:
         return ""
     return token
@@ -102,7 +105,8 @@ def find_paid_by_tg_id(db: Session, tg_id: int) -> Identity | None:
 
 
 def find_paid_identity(db: Session, username: str) -> Identity | None:
-    name = parse_username(username)
+    raw = (username or "").strip().lstrip("@")
+    name = parse_username(username) or (raw if USER_RE.fullmatch(raw) else "")
     if not name:
         return None
     ident = db.scalar(select(Identity).where(Identity.username.ilike(name)))
@@ -115,8 +119,8 @@ def find_paid_identity(db: Session, username: str) -> Identity | None:
 
 
 async def resolve_paid_identity(db: Session, username: str, bot=None):
+    ident = find_paid_identity(db, username)
     name = parse_username(username)
-    ident = find_paid_identity(db, name) if name else None
     if ident or not bot or not name:
         return ident
     try:
