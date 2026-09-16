@@ -26,7 +26,6 @@ from telegram.ext import (
 from app.config import (
     ADMIN_TG_IDS,
     PUBLIC_BASE_URL,
-    TRIAL_DAYS,
     USDT_ADDRESS,
     USDT_CHAIN,
     WEBHOOK_BASE_URL,
@@ -38,13 +37,17 @@ from app.models import Identity, Order, Tenant, utcnow
 from app.services import (
     activate_order,
     add_event,
+    find_paid_identity,
     get_or_create_tenant,
     get_setting,
     is_staff,
     new_code,
     open_order,
+    parse_username,
+    save_paid_profile,
     set_setting,
     stars_price,
+    tenant_usable,
     usdt_price,
 )
 from app.verify import card_kb, card_text, share_url
@@ -60,16 +63,39 @@ def _pay_address(db) -> str:
     return get_setting(db, "usdt_address", USDT_ADDRESS)
 
 
-def _kb_home(stars: int, usdt: float) -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(
+def _bot(context) -> str:
+    return context.bot.username or "zhizhusp_bot"
+
+
+def _kb_home(stars: int, usdt: float, paid: bool = False) -> InlineKeyboardMarkup:
+    rows = [
         [
-            [InlineKeyboardButton("开始试用 / 绑定机器人", callback_data="bind")],
-            [
-                InlineKeyboardButton(f"Stars 月费 {stars}⭐", callback_data="pay_stars"),
-                InlineKeyboardButton(f"USDT 年付 {usdt:g}", callback_data="pay_usdt"),
-            ],
-            [InlineKeyboardButton("我的状态", callback_data="status")],
-        ]
+            InlineKeyboardButton(f"Stars 月费 {stars}⭐", callback_data="pay_stars"),
+            InlineKeyboardButton(f"USDT 年付 {usdt:g}", callback_data="pay_usdt"),
+        ],
+        [InlineKeyboardButton("我的状态", callback_data="status")],
+    ]
+    if paid:
+        rows.insert(0, [InlineKeyboardButton("修改核验资料", callback_data="edit")])
+    return InlineKeyboardMarkup(rows)
+
+
+async def _send_lookup(message, db, name: str, bot_name: str) -> None:
+    if not name:
+        await message.reply_text("请发送要核验的用户名，例如 @username")
+        return
+    ident = find_paid_identity(db, name)
+    if not ident:
+        await message.reply_text(
+            f"未找到已开通的官方登记 @{name}。\n"
+            "对方需先充值，并在本机器人里保存资料。"
+        )
+        return
+    tenant = db.get(Tenant, ident.tenant_id)
+    url = share_url(bot_name, tenant.id) if tenant else ""
+    await message.reply_text(
+        card_text(ident, watermark=True, bot_username=bot_name),
+        reply_markup=card_kb(ident, share_url=url, bot_username=bot_name),
     )
 
 
@@ -78,32 +104,36 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     try:
         user = update.effective_user
         tenant = get_or_create_tenant(db, user.id)
-        if tenant.identity:
-            if user.username:
-                tenant.identity.username = user.username
-            if not tenant.identity.official_user_id:
-                tenant.identity.official_user_id = user.id
-            if not tenant.identity.display_name:
-                tenant.identity.display_name = user.full_name
-            db.commit()
-        text = (
-            "官方身份核验平台\n\n"
-            "直接用本机器人核验，不用提交自己的 Bot Token。\n"
-            "在任何对话输入 @"
-            f"{context.bot.username or 'zhizhusp_bot'} 加空格，点出现的核验卡即可发给朋友。\n\n"
-            f"当前状态：{tenant.status}\n"
-            f"试用截止：{tenant.trial_ends_at}\n"
-            f"已付到：{tenant.paid_until or '—'}\n"
-            f"绑定机器人：@{tenant.bot_username or '未绑定'}"
-        )
+        payload = (context.args[0] if context.args else "").strip()
+        if payload.startswith("q"):
+            name = parse_username(payload[1:])
+            await _send_lookup(update.effective_message, db, name, _bot(context))
+            return
+        paid = tenant_usable(tenant)
+        if paid:
+            save_paid_profile(db, tenant, user)
+            text = (
+                "已开通。你的核验资料保存在本机器人。\n"
+                f"已付到：{tenant.paid_until or '管理员'}\n\n"
+                "修改资料：\n/setid 数字ID\n/setname 显示名\n/setalert 弹窗文案\n/setcard 身份卡正文"
+            )
+        else:
+            text = (
+                "官方身份核验平台\n\n"
+                "未充值：在任意对话输入 @"
+                f"{_bot(context)} 核验 @用户名\n"
+                "点击后会跳进本机器人，按用户名查已充值用户存档的官方资料。\n\n"
+                "充值后才能在这里登记自己的官方身份。"
+            )
         await update.effective_message.reply_text(
-            text, reply_markup=_kb_home(stars_price(db), usdt_price(db))
+            text, reply_markup=_kb_home(stars_price(db), usdt_price(db), paid)
         )
     finally:
         db.close()
 
 
 async def cmd_status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    context.args = []
     await cmd_start(update, context)
 
 
@@ -111,33 +141,30 @@ async def on_inline(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     q = update.inline_query
     db = get_session()
     try:
-        user = q.from_user
-        tenant = get_or_create_tenant(db, user.id)
-        if tenant.identity:
-            if user.username:
-                tenant.identity.username = user.username
-            if not tenant.identity.official_user_id:
-                tenant.identity.official_user_id = user.id
-            if not tenant.identity.display_name:
-                tenant.identity.display_name = user.full_name
-            db.commit()
-        ident = tenant.identity or Identity()
-        bot_name = context.bot.username or "zhizhusp_bot"
-        url = share_url(bot_name, tenant.id)
+        raw = (q.query or "").strip()
+        name = parse_username(raw)
+        param = f"q_{name}" if name else "q"
+        bot_name = _bot(context)
+        start = f"https://t.me/{bot_name}?start={param}"
+        title = f"查询 @{name}" if name else "打开机器人核验用户名"
         await q.answer(
             [
                 InlineQueryResultArticle(
-                    id=f"card-{tenant.id}",
-                    title=f"{ident.display_name or '官方身份'} · 核验卡",
-                    description="点击发送官方身份核验卡",
+                    id="lookup",
+                    title=title,
+                    description="跳转到机器人，查已充值用户保存的官方资料",
                     input_message_content=InputTextMessageContent(
-                        card_text(ident, watermark=True, bot_username=bot_name)
+                        f"点下方按钮打开机器人查询 {('@' + name) if name else '用户名'}"
                     ),
-                    reply_markup=card_kb(ident, share_url=url, bot_username=bot_name),
+                    reply_markup=InlineKeyboardMarkup(
+                        [[InlineKeyboardButton("打开机器人查询", url=start)]]
+                    ),
                 )
             ],
             cache_time=1,
             is_personal=True,
+            switch_pm_text="打开机器人查询",
+            switch_pm_parameter=param[:64],
         )
     except Exception:
         await q.answer([], cache_time=1)
@@ -152,26 +179,22 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     db = get_session()
     try:
         tenant = get_or_create_tenant(db, query.from_user.id)
-        if data == "bind":
-            await query.message.reply_text(
-                "独立品牌机器人是可选项。平时直接用 @"
-                f"{context.bot.username or 'zhizhusp_bot'} 发卡即可。\n\n"
-                "如要自己的机器人：\n1. 打开 @BotFather\n2. 发送 /newbot\n3. 把 Token 发到本对话"
-            )
-            return
         if data == "status":
+            context.args = []
             await cmd_start(update, context)
             return
-        if data == "pay_stars":
-            if is_staff(query.from_user.id):
-                await query.message.reply_text("管理员账号免费，不用付费。")
+        if data == "edit":
+            if not tenant_usable(tenant):
+                await query.message.reply_text("充值后才能保存核验资料。")
                 return
+            await query.message.reply_text(
+                "修改并保存资料：\n/setid 数字ID\n/setname 显示名\n/setalert 弹窗文案\n/setcard 身份卡正文"
+            )
+            return
+        if data == "pay_stars":
             await _create_stars(query, context, tenant, db)
             return
         if data == "pay_usdt":
-            if is_staff(query.from_user.id):
-                await query.message.reply_text("管理员账号免费，不用付费。")
-                return
             await _create_usdt(query, tenant, db)
             return
         if data == "info":
@@ -202,20 +225,19 @@ async def _create_stars(query, context, tenant: Tenant, db) -> None:
     db.commit()
     await context.bot.send_invoice(
         chat_id=query.from_user.id,
-        title="核验机器人 Pro 月费",
-        description="30天托管 + 转发核验",
+        title="核验套餐月费",
+        description="充值后可在机器人里保存官方资料",
         payload=payload,
         provider_token="",
         currency="XTR",
         prices=[LabeledPrice("30天", price)],
-        subscription_period=2592000,
     )
 
 
 async def _create_usdt(query, tenant: Tenant, db) -> None:
     addr = _pay_address(db)
     if not addr:
-        await query.message.reply_text("平台尚未配置 USDT 收款地址，请用 Stars 月费。")
+        await query.message.reply_text("平台尚未配置 USDT 收款地址，请用 Stars。")
         return
     if open_order(db, tenant.id):
         await query.message.reply_text("你已有一笔待支付订单，请先完成或等待过期。")
@@ -277,15 +299,31 @@ async def on_successful_payment(update: Update, context: ContextTypes.DEFAULT_TY
         order.telegram_charge_id = pay.telegram_payment_charge_id
         add_event(db, order, "paid", "stars_successful_payment")
         tenant = activate_order(db, order)
-        await update.message.reply_text(f"已开通至 {tenant.paid_until}")
+        save_paid_profile(db, tenant, update.effective_user)
+        await update.message.reply_text(
+            f"已开通至 {tenant.paid_until}\n资料已存入机器人。用 /setid /setname /setalert /setcard 修改。"
+        )
+    finally:
+        db.close()
+
+
+async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    text = (update.message.text or "").strip()
+    if TOKEN_RE.match(text):
+        await on_token(update, context)
+        return
+    name = parse_username(text)
+    if not name:
+        return
+    db = get_session()
+    try:
+        await _send_lookup(update.effective_message, db, name, _bot(context))
     finally:
         db.close()
 
 
 async def on_token(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     text = (update.message.text or "").strip()
-    if not TOKEN_RE.match(text):
-        return
     db = get_session()
     try:
         tenant = get_or_create_tenant(db, update.effective_user.id)
@@ -293,79 +331,113 @@ async def on_token(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             await update.message.delete()
         except Exception:
             pass
+        if not tenant_usable(tenant):
+            await update.effective_message.reply_text("请先充值开通，再发送 Token 克隆。")
+            return
         async with httpx.AsyncClient(timeout=20) as client:
-            r = await client.get(f"https://api.telegram.org/bot{text}/getMe")
-            data = r.json()
+            data = (await client.get(f"https://api.telegram.org/bot{text}/getMe")).json()
         if not data.get("ok"):
-            await update.effective_message.reply_text("Token 无效，请重新从 @BotFather 复制。")
+            await update.effective_message.reply_text("Token 无效。")
             return
         me = data["result"]
         taken = db.scalar(select(Tenant).where(Tenant.bot_id == me["id"], Tenant.id != tenant.id))
         if taken:
-            await update.effective_message.reply_text("这个机器人已被其他账号绑定。")
+            await update.effective_message.reply_text("这个机器人已被绑定。")
             return
         tenant.bot_id = me["id"]
         tenant.bot_username = me.get("username")
         tenant.bot_token_enc = encrypt_token(text)
-        if not tenant.trial_ends_at and not is_staff(update.effective_user.id):
-            tenant.trial_ends_at = utcnow() + timedelta(days=TRIAL_DAYS)
         db.commit()
         if WEBHOOK_BASE_URL:
-            url = f"{WEBHOOK_BASE_URL}/wh/t/{tenant.id}"
             async with httpx.AsyncClient(timeout=20) as client:
                 await client.post(
                     f"https://api.telegram.org/bot{text}/setWebhook",
                     json={
-                        "url": url,
+                        "url": f"{WEBHOOK_BASE_URL}/wh/t/{tenant.id}",
                         "secret_token": WEBHOOK_SECRET,
                         "allowed_updates": ["message", "callback_query", "inline_query"],
                     },
                 )
-        ident = tenant.identity or Identity(tenant_id=tenant.id)
-        if not ident.official_user_id:
-            ident.official_user_id = update.effective_user.id
-            ident.display_name = update.effective_user.full_name
-            ident.username = update.effective_user.username or ""
-            db.add(ident)
-            db.commit()
-        await update.effective_message.reply_text(
-            f"已绑定 @{tenant.bot_username}\nWebhook 已设置。\n默认官方 ID：{ident.official_user_id}",
-            reply_markup=_kb_home(stars_price(db), usdt_price(db)),
-        )
+        await update.effective_message.reply_text(f"已绑定 @{tenant.bot_username}")
     finally:
         db.close()
 
 
+async def _need_paid(update, db):
+    tenant = get_or_create_tenant(db, update.effective_user.id)
+    if not tenant_usable(tenant):
+        await update.effective_message.reply_text("充值后才能在机器人里保存核验资料。")
+        return None, None
+    ident = tenant.identity or Identity(tenant_id=tenant.id)
+    return tenant, ident
+
+
 async def cmd_setid(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    if not context.args or not context.args[0].isdigit():
-        await update.effective_message.reply_text("用法：/setid 你的Telegram数字ID")
-        return
     db = get_session()
     try:
-        tenant = get_or_create_tenant(db, update.effective_user.id)
-        ident = tenant.identity or Identity(tenant_id=tenant.id)
+        tenant, ident = await _need_paid(update, db)
+        if not ident:
+            return
+        if not context.args or not context.args[0].isdigit():
+            await update.effective_message.reply_text("用法：/setid 你的Telegram数字ID")
+            return
         ident.official_user_id = int(context.args[0])
         db.add(ident)
         db.commit()
-        await update.effective_message.reply_text(f"官方 User ID 已设为 {ident.official_user_id}")
+        await update.effective_message.reply_text(f"资料已保存，官方 ID {ident.official_user_id}")
     finally:
         db.close()
 
 
 async def cmd_setname(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    if not context.args:
-        await update.effective_message.reply_text("用法：/setname 显示名")
-        return
     db = get_session()
     try:
-        tenant = get_or_create_tenant(db, update.effective_user.id)
-        ident = tenant.identity or Identity(tenant_id=tenant.id)
+        tenant, ident = await _need_paid(update, db)
+        if not ident:
+            return
+        if not context.args:
+            await update.effective_message.reply_text("用法：/setname 显示名")
+            return
         ident.display_name = " ".join(context.args)
         if update.effective_user.username:
             ident.username = update.effective_user.username
         db.add(ident)
         db.commit()
-        await update.effective_message.reply_text(f"显示名已设为 {ident.display_name}")
+        await update.effective_message.reply_text(f"资料已保存，显示名 {ident.display_name}")
+    finally:
+        db.close()
+
+
+async def cmd_setalert(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    db = get_session()
+    try:
+        tenant, ident = await _need_paid(update, db)
+        if not ident:
+            return
+        if not context.args:
+            await update.effective_message.reply_text("用法：/setalert 弹窗文案")
+            return
+        ident.alert_text = " ".join(context.args)[:200]
+        db.add(ident)
+        db.commit()
+        await update.effective_message.reply_text("弹窗文案已保存。")
+    finally:
+        db.close()
+
+
+async def cmd_setcard(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    db = get_session()
+    try:
+        tenant, ident = await _need_paid(update, db)
+        if not ident:
+            return
+        if not context.args:
+            await update.effective_message.reply_text("用法：/setcard 身份卡正文")
+            return
+        ident.card_text = " ".join(context.args)
+        db.add(ident)
+        db.commit()
+        await update.effective_message.reply_text("身份卡已保存。")
     finally:
         db.close()
 
@@ -375,9 +447,7 @@ async def cmd_prices(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
     try:
         addr = _pay_address(db) or "未设置"
         await update.effective_message.reply_text(
-            f"Stars 月费：{stars_price(db)}⭐\n"
-            f"USDT 年付：{usdt_price(db):g}\n"
-            f"收款地址：{addr}"
+            f"Stars 月费：{stars_price(db)}⭐\nUSDT 年付：{usdt_price(db):g}\n收款地址：{addr}"
         )
     finally:
         db.close()
@@ -385,46 +455,22 @@ async def cmd_prices(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
 
 async def cmd_setprice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not _is_admin(update.effective_user.id):
-        await update.effective_message.reply_text("只有平台创建者可以改价。先在 Railway 填 ADMIN_TG_IDS。")
+        await update.effective_message.reply_text("只有平台创建者可以改价。")
         return
     if len(context.args) < 2:
-        await update.effective_message.reply_text(
-            "用法：\n/setprice stars 500\n/setprice usdt 99\n/prices 查看当前价格"
-        )
+        await update.effective_message.reply_text("用法：/setprice stars 500 或 /setprice usdt 99")
         return
     kind = context.args[0].lower()
     raw = context.args[1]
     db = get_session()
     try:
         if kind in {"stars", "star", "xtr"}:
-            try:
-                value = int(float(raw))
-            except ValueError:
-                await update.effective_message.reply_text("Stars 必须是整数，例如 /setprice stars 300")
-                return
-            if value < 1:
-                await update.effective_message.reply_text("Stars 至少 1")
-                return
-            set_setting(db, "stars_monthly", str(value))
-            await update.effective_message.reply_text(
-                f"Stars 月费已改为 {value}⭐，新订单立即生效。",
-                reply_markup=_kb_home(value, usdt_price(db)),
-            )
+            set_setting(db, "stars_monthly", str(int(float(raw))))
+            await update.effective_message.reply_text(f"Stars 月费已改为 {int(float(raw))}⭐")
             return
         if kind in {"usdt", "u", "year"}:
-            try:
-                value = float(raw)
-            except ValueError:
-                await update.effective_message.reply_text("USDT 必须是数字，例如 /setprice usdt 79")
-                return
-            if value <= 0:
-                await update.effective_message.reply_text("USDT 必须大于 0")
-                return
-            set_setting(db, "usdt_yearly", f"{value:g}")
-            await update.effective_message.reply_text(
-                f"USDT 年付已改为 {value:g}，新订单立即生效。",
-                reply_markup=_kb_home(stars_price(db), value),
-            )
+            set_setting(db, "usdt_yearly", f"{float(raw):g}")
+            await update.effective_message.reply_text(f"USDT 年付已改为 {float(raw):g}")
             return
         await update.effective_message.reply_text("只能改 stars 或 usdt。")
     finally:
@@ -433,16 +479,14 @@ async def cmd_setprice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
 async def cmd_setaddr(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not _is_admin(update.effective_user.id):
-        await update.effective_message.reply_text("只有平台创建者可以改收款地址。")
         return
     if not context.args:
-        await update.effective_message.reply_text("用法：/setaddr 你的TRC20地址")
+        await update.effective_message.reply_text("用法：/setaddr TRC20地址")
         return
-    addr = context.args[0].strip()
     db = get_session()
     try:
-        set_setting(db, "usdt_address", addr)
-        await update.effective_message.reply_text(f"USDT 收款地址已改为：{addr}")
+        set_setting(db, "usdt_address", context.args[0].strip())
+        await update.effective_message.reply_text("收款地址已更新。")
     finally:
         db.close()
 
@@ -477,6 +521,8 @@ def build_platform_app(token: str) -> Application:
     app.add_handler(CommandHandler("status", cmd_status))
     app.add_handler(CommandHandler("setid", cmd_setid))
     app.add_handler(CommandHandler("setname", cmd_setname))
+    app.add_handler(CommandHandler("setalert", cmd_setalert))
+    app.add_handler(CommandHandler("setcard", cmd_setcard))
     app.add_handler(CommandHandler("confirm", cmd_confirm))
     app.add_handler(CommandHandler("prices", cmd_prices))
     app.add_handler(CommandHandler("setprice", cmd_setprice))
@@ -485,5 +531,5 @@ def build_platform_app(token: str) -> Application:
     app.add_handler(CallbackQueryHandler(on_callback))
     app.add_handler(PreCheckoutQueryHandler(on_precheckout))
     app.add_handler(MessageHandler(filters.SUCCESSFUL_PAYMENT, on_successful_payment))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, on_token))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, on_text))
     return app
