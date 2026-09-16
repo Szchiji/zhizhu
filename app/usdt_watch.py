@@ -14,7 +14,7 @@ from app.config import USDT_ADDRESS, USDT_CHAIN
 from app.db import get_session
 from app.models import Order, Tenant, utcnow
 from app.plans import PLANS
-from app.services import activate_order, add_event, fmt_until, get_setting, save_paid_profile, set_setting
+from app.services import activate_order, add_event, fmt_until, get_setting, save_paid_profile, set_setting, tenant_usable
 
 log = logging.getLogger("zhizhu.usdt")
 USDT_CONTRACT = "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t"
@@ -62,6 +62,25 @@ async def _profile_from_bot(bot, tg_id: int):
         x for x in (getattr(chat, "first_name", None), getattr(chat, "last_name", None)) if x
     )
     return SimpleNamespace(id=tg_id, username=getattr(chat, "username", None), full_name=name)
+
+
+async def hydrate_paid_profiles(bot) -> int:
+    if not bot:
+        return 0
+    db = get_session()
+    n = 0
+    try:
+        rows = list(db.scalars(select(Tenant)))
+        for tenant in rows:
+            if not tenant_usable(tenant):
+                continue
+            user = await _profile_from_bot(bot, tenant.owner_tg_id)
+            save_paid_profile(db, tenant, user)
+            n += 1
+            log.info("hydrated tenant=%s tg=%s @%s", tenant.id, tenant.owner_tg_id, user.username)
+    finally:
+        db.close()
+    return n
 
 
 async def remind_expiring(bot) -> None:
@@ -184,6 +203,11 @@ async def watch_loop(bot) -> None:
         await refresh_from_bot(bot)
     except Exception:
         log.exception("brand refresh")
+    try:
+        n = await hydrate_paid_profiles(bot)
+        log.info("hydrated %s paid profiles", n)
+    except Exception:
+        log.exception("hydrate profiles")
     ticks = 0
     while True:
         try:
