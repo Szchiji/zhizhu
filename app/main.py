@@ -7,10 +7,11 @@ from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import select
-from telegram import Bot, Update
+from telegram import Bot, MenuButtonWebApp, Update, WebAppInfo
 
 from app.config import (
     PLATFORM_BOT_TOKEN,
+    PUBLIC_BASE_URL,
     USDT_ADDRESS,
     USDT_CHAIN,
     USDT_CONFIRM_SECRET,
@@ -20,6 +21,7 @@ from app.config import (
 from app.crypto_token import decrypt_token
 from app.db import get_session, init_db
 from app.models import Order, Tenant
+from app.plans import PLANS, plan_stars, plan_usdt
 from app.platform_bot import build_platform_app
 from app.services import activate_order, add_event
 from app.tenant_bot import handle_tenant_update
@@ -28,6 +30,18 @@ logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("zhizhu")
 templates = Jinja2Templates(directory="app/templates")
 platform_app = None
+
+
+def _days_text(days: int) -> str:
+    if days >= 10000:
+        return "长期有效"
+    if days == 15:
+        return "15 天"
+    if days == 90:
+        return "90 天"
+    if days == 365:
+        return "365 天"
+    return f"{days} 天"
 
 
 @asynccontextmanager
@@ -47,9 +61,22 @@ async def lifespan(app: FastAPI):
             url=url,
             secret_token=WEBHOOK_SECRET,
             drop_pending_updates=False,
-            allowed_updates=["message", "callback_query", "inline_query", "pre_checkout_query"],
+            allowed_updates=[
+                "message",
+                "callback_query",
+                "inline_query",
+                "pre_checkout_query",
+            ],
         )
         log.info("platform webhook %s", url)
+    mini = f"{(PUBLIC_BASE_URL or WEBHOOK_BASE_URL or '').rstrip('/')}/mini"
+    if mini.startswith("https://"):
+        try:
+            await platform_app.bot.set_chat_menu_button(
+                menu_button=MenuButtonWebApp(text="开通套餐", web_app=WebAppInfo(url=mini))
+            )
+        except Exception as exc:
+            log.warning("menu button failed: %s", exc)
     yield
     if platform_app:
         await platform_app.stop()
@@ -71,7 +98,31 @@ async def healthz():
 
 @app.get("/")
 async def root():
-    return {"name": "zhizhu", "docs": "see README"}
+    return {"name": "zhizhu", "mini": "/mini"}
+
+
+@app.get("/mini", response_class=HTMLResponse)
+async def mini(request: Request):
+    db = get_session()
+    try:
+        plans = []
+        for key, meta in PLANS.items():
+            plans.append(
+                {
+                    "key": key,
+                    "label": meta["label"],
+                    "days_text": _days_text(meta["days"]),
+                    "stars": plan_stars(db, key),
+                    "usdt": f"{plan_usdt(db, key):g}",
+                }
+            )
+        return templates.TemplateResponse(
+            request,
+            "mini.html",
+            {"plans": plans, "bot": "zhizhusp_bot"},
+        )
+    finally:
+        db.close()
 
 
 @app.post("/wh/platform")
