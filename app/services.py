@@ -92,16 +92,25 @@ def find_paid_identity(db: Session, username: str) -> Identity | None:
 
 
 def save_paid_profile(db: Session, tenant: Tenant, user) -> Identity:
-    ident = tenant.identity or Identity(tenant_id=tenant.id)
+    ident = db.scalar(select(Identity).where(Identity.tenant_id == tenant.id))
+    if not ident:
+        ident = Identity(tenant_id=tenant.id, alert_text="此为官方登记账号")
+        db.add(ident)
     if user:
-        if user.username:
-            ident.username = user.username
-        if not ident.official_user_id:
-            ident.official_user_id = user.id
-        if not ident.display_name:
-            ident.display_name = user.full_name
-    db.add(ident)
+        uname = getattr(user, "username", None)
+        if uname:
+            ident.username = str(uname).lstrip("@")
+        uid = getattr(user, "id", None)
+        if uid:
+            try:
+                ident.official_user_id = int(uid)
+            except (TypeError, ValueError):
+                pass
+        name = getattr(user, "full_name", None) or ""
+        if name and not ident.display_name:
+            ident.display_name = str(name)[:64]
     db.commit()
+    db.refresh(ident)
     return ident
 
 
