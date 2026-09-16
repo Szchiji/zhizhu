@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="zh">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1" />
+  <title>蜘蛛核验</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <style>
+    :root { --bg:#0f172a; --card:#1e293b; --line:#334155; --text:#f8fafc; --muted:#94a3b8; --blue:#3b82f6; }
+    * { box-sizing: border-box; }
+    body { margin:0; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; background:var(--bg); color:var(--text); }
+    .top { padding:28px 20px 12px; }
+    .eyebrow { color:#60a5fa; font-size:12px; letter-spacing:.08em; }
+    h1 { margin:8px 0 6px; font-size:24px; }
+    .sub { color:var(--muted); font-size:14px; line-height:1.6; }
+    .list { padding:8px 16px 24px; display:flex; flex-direction:column; gap:12px; }
+    .card { background:var(--card); border:1px solid var(--line); border-radius:18px; padding:16px; }
+    .card h2 { margin:0 0 4px; font-size:18px; }
+    .price { font-size:20px; font-weight:700; margin:10px 0; }
+    .muted { color:var(--muted); font-size:13px; }
+    .btns { display:flex; gap:8px; margin-top:12px; }
+    button { flex:1; border:0; border-radius:12px; padding:12px 10px; font-size:14px; font-weight:600; color:#fff; }
+    .stars { background:var(--blue); }
+    .usdt { background:#0f766e; }
+    .how { margin:8px 16px 40px; padding:16px; border-radius:18px; background:#111827; color:var(--muted); font-size:13px; line-height:1.7; }
+  </style>
+</head>
+<body>
+  <div class="top">
+    <div class="eyebrow">ZHIZHU VERIFY</div>
+    <h1>开通官方核验</h1>
+    <p class="sub">开通后可在机器人保存身份资料。未开通也可查询已登记账号。</p>
+  </div>
+  <div class="list">
+    {% for p in plans %}
+    <div class="card">
+      <h2>{{ p.label }}</h2>
+      <div class="muted">{{ p.days_text }}</div>
+      <div class="price">{{ p.stars }}⭐  或  {{ p.usdt }} USDT</div>
+      <div class="btns">
+        <button class="stars" onclick="pay('{{ p.key }}','stars')">Stars 支付</button>
+        <button class="usdt" onclick="pay('{{ p.key }}','usdt')">USDT 支付</button>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  <div class="how">
+    使用方法<br>
+    1. 查询：发送对方 @用户名，或在其他对话输入 @{{ bot }} 加空格<br>
+    2. 开通：在本页选择套餐<br>
+    3. 登记：支付成功后按提示保存姓名与账号
+  </div>
+  <script>
+    const tg = window.Telegram.WebApp;
+    tg.ready(); tg.expand();
+    function pay(plan, rail) {
+      tg.sendData(JSON.stringify({ plan: plan, rail: rail }));
+      tg.close();
+    }
+  </script>
+</body>
+</html>
