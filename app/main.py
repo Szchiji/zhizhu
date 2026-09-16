@@ -4,6 +4,7 @@ import asyncio
 import logging
 from contextlib import asynccontextmanager
 from datetime import timedelta
+from types import SimpleNamespace
 
 import httpx
 from fastapi import FastAPI, Header, HTTPException, Request
@@ -38,6 +39,7 @@ from app.services import (
     new_code,
     open_order,
     parse_username,
+    save_paid_profile,
     tenant_usable,
 )
 from app.tenant_bot import handle_tenant_update
@@ -148,15 +150,17 @@ async def mini(request: Request):
 
 
 @app.get("/api/mini/me")
-async def mini_me(user_id: int = 0, init_data: str = ""):
+async def mini_me(user_id: int = 0, init_data: str = "", username: str = "", display_name: str = ""):
     uid = _uid(user_id=user_id, init_data=init_data)
     if not uid:
         return JSONResponse({"error": "未登录"}, status_code=401)
     db = get_session()
     try:
         tenant = get_or_create_tenant(db, uid)
-        ident = tenant.identity
         paid = tenant_usable(tenant)
+        if paid:
+            save_paid_profile(db, tenant, SimpleNamespace(id=uid, username=username or None, full_name=display_name or ""))
+        ident = db.scalar(select(Identity).where(Identity.tenant_id == tenant.id)) or tenant.identity
         until = tenant.paid_until.strftime("%Y-%m-%d %H:%M") if tenant.paid_until else ("管理员" if paid else "")
         return {
             "ok": True,
@@ -236,11 +240,14 @@ async def mini_profile(request: Request):
         tenant = get_or_create_tenant(db, uid)
         if not tenant_usable(tenant):
             return JSONResponse({"error": "开通后才能修改资料"}, status_code=403)
-        ident = tenant.identity or Identity(tenant_id=tenant.id)
+        ident = db.scalar(select(Identity).where(Identity.tenant_id == tenant.id)) or Identity(tenant_id=tenant.id)
         if "display_name" in body:
             ident.display_name = str(body.get("display_name") or "")[:64]
         if "card_text" in body:
             ident.card_text = str(body.get("card_text") or "")[:2000]
+        if body.get("username"):
+            ident.username = str(body.get("username")).lstrip("@")
+        ident.official_user_id = ident.official_user_id or uid
         db.add(ident)
         db.commit()
         return {"ok": True}
