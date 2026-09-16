@@ -6,18 +6,23 @@ from app.models import Identity
 
 
 def card_text(ident: Identity, *, watermark: bool = False, bot_username: str = "") -> str:
-    if ident.card_text:
-        return ident.card_text
     name = ident.display_name or "—"
     uname = f"@{ident.username}" if ident.username else "—"
     uid = ident.official_user_id or "—"
-    return (
-        "官方身份核验\n\n"
+    extra = (ident.card_text or "").strip()
+    body = (
+        "✅  官方登记\n"
+        "━━━━━━━━━━━━\n"
         f"姓名    {name}\n"
         f"账号    {uname}\n"
-        f"ID      {uid}\n\n"
-        "仅以上登记为官方账号，其他同名带号均非本人。"
+        f"ID      {uid}\n"
+        "━━━━━━━━━━━━"
     )
+    if extra:
+        body += f"\n{extra}"
+    else:
+        body += "\n仅以上登记为官方账号。"
+    return body
 
 
 def alert_text(ident: Identity) -> str:
@@ -31,9 +36,7 @@ def card_kb(ident: Identity, *, share_url: str = "", bot_username: str = "") -> 
     rows: list[list[InlineKeyboardButton]] = []
     row: list[InlineKeyboardButton] = []
     if ident.username:
-        row.append(InlineKeyboardButton("联系登记账号", url=f"https://t.me/{ident.username.lstrip('@')}"))
-    elif ident.official_user_id:
-        row.append(InlineKeyboardButton("查看资料", url=f"tg://user?id={ident.official_user_id}"))
+        row.append(InlineKeyboardButton("联系此账号", url=f"https://t.me/{ident.username.lstrip('@')}"))
     if share_url:
         row.append(InlineKeyboardButton("再次查询", url=share_url))
     if row:
