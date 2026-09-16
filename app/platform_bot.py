@@ -13,7 +13,7 @@ from app.config import ADMIN_TG_IDS, PUBLIC_BASE_URL, USDT_ADDRESS, USDT_CHAIN, 
 from app.crypto_token import encrypt_token
 from app.db import get_session
 from app.inline_query import on_inline
-from app.models import Order, Tenant, utcnow
+from app.models import Identity, Order, Tenant, utcnow
 from app.plans import PLANS, clone_on, plan_stars, plan_usdt, price_board, set_clone
 from app.services import activate_order, add_event, find_paid_by_tg_id, fmt_until, get_or_create_tenant, get_setting, new_code, open_order, parse_username, resolve_paid_identity, save_paid_profile, set_setting, tenant_usable
 from app.verify import card_kb, card_text, share_url
@@ -129,6 +129,67 @@ async def cmd_admin(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     db = get_session()
     try:
         await _show_admin(update.effective_message, db)
+    finally:
+        db.close()
+
+
+async def cmd_paid(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if not _is_admin(update.effective_user.id):
+        return
+    db = get_session()
+    try:
+        rows = list(db.scalars(select(Tenant).order_by(Tenant.id.desc()).limit(40)))
+        lines = ['已开通用户']
+        for tenant in rows:
+            if not tenant_usable(tenant):
+                continue
+            ident = tenant.identity
+            uname = f'@{ident.username}' if ident and ident.username else '无用户名'
+            lines.append(f'#{tenant.id}  TG {tenant.owner_tg_id}  {uname}  至 {fmt_until(tenant.paid_until) or "-"}')
+        if len(lines) == 1:
+            lines.append('暂无')
+        lines.append('\n补登记：/bind Q_7ge')
+        await update.effective_message.reply_text('\n'.join(lines))
+    finally:
+        db.close()
+
+
+async def cmd_bind(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if not _is_admin(update.effective_user.id):
+        return
+    if not context.args:
+        await update.effective_message.reply_text('用法：/bind 用户名\n或 /bind 用户名 电报ID')
+        return
+    name = parse_username(context.args[0]) or context.args[0].lstrip('@')
+    tg_id = 0
+    if len(context.args) > 1 and context.args[1].lstrip('-').isdigit():
+        tg_id = int(context.args[1])
+    db = get_session()
+    try:
+        if not tg_id:
+            try:
+                chat = await context.bot.get_chat('@' + name)
+                tg_id = chat.id
+            except Exception as exc:
+                await update.effective_message.reply_text(f'电报查不到 @{name}\n{exc}\n改用 /bind {name} 电报ID')
+                return
+        tenant = db.scalar(select(Tenant).where(Tenant.owner_tg_id == tg_id))
+        if not tenant:
+            ident = db.scalar(select(Identity).where(Identity.official_user_id == tg_id))
+            tenant = db.get(Tenant, ident.tenant_id) if ident else None
+        if not tenant:
+            await update.effective_message.reply_text(f'库里没有 TG {tg_id} 的开通记录。先发 /paid 看列表。')
+            return
+        ident = tenant.identity or Identity(tenant_id=tenant.id)
+        ident.username = name
+        ident.official_user_id = ident.official_user_id or tg_id
+        if not ident.display_name:
+            ident.display_name = name
+        db.add(ident)
+        db.commit()
+        await update.effective_message.reply_text(
+            f'已补登记 @{name}\nTG {tenant.owner_tg_id}\n开通至 {fmt_until(tenant.paid_until) or "-"}'
+        )
     finally:
         db.close()
 
@@ -388,7 +449,12 @@ async def cmd_admin_alias(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
 def build_platform_app(token: str) -> Application:
     app = Application.builder().token(token).updater(None).build()
-    for name, fn in [('start', cmd_start), ('status', cmd_status), ('help', cmd_help), ('admin', cmd_admin), ('confirm', cmd_admin_alias), ('prices', cmd_admin_alias), ('setprice', cmd_admin_alias), ('setaddr', cmd_admin_alias), ('clone', cmd_admin_alias)]:
+    for name, fn in [
+        ('start', cmd_start), ('status', cmd_status), ('help', cmd_help), ('admin', cmd_admin),
+        ('paid', cmd_paid), ('bind', cmd_bind),
+        ('confirm', cmd_admin_alias), ('prices', cmd_admin_alias), ('setprice', cmd_admin_alias),
+        ('setaddr', cmd_admin_alias), ('clone', cmd_admin_alias),
+    ]:
         app.add_handler(CommandHandler(name, fn))
     app.add_handler(InlineQueryHandler(on_inline))
     app.add_handler(CallbackQueryHandler(on_callback))
