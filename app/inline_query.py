@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, InlineQueryResultArticle, InputTextMessageContent, Update
+from telegram import InlineQueryResultArticle, InputTextMessageContent, Update
 from telegram.ext import ContextTypes
 
 from app.brand import brand_name, bot_username
@@ -19,28 +19,25 @@ async def on_inline(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         return
     bot_name = (context.bot.username or bot_username() or "bot").lstrip("@")
     brand = brand_name() or "官方核验"
-    name = parse_username(q.query or "") or (q.query or "").strip().lstrip("@").split()[0] if (q.query or "").strip() else ""
+    raw = (q.query or "").strip()
+    name = parse_username(raw) or raw.lstrip("@").split()[0] if raw else ""
     title = f"查询 @{name}" if name else f"{brand}·官方核验"
-    desc = "点击发送查询结果" if name else "输入用户名查询"
+    desc = "点击发送官方卡" if name else "输入用户名查询"
     body = promo_text(bot_name, name)
-    markup = InlineKeyboardMarkup(
-        [
-            [InlineKeyboardButton("查询更多", url=f"https://t.me/{bot_name}?start={'q'+name if name else 'ask'}")],
-            [InlineKeyboardButton("开通官方核验", url=f"https://t.me/{bot_name}?start=pay")],
-        ]
-    )
+    uname = name
     db = get_session()
     try:
         ident = await resolve_paid_identity(db, name, context.bot) if name else None
         if ident:
-            title = f"✅ @{ident.username or name} 官方登记"
+            uname = ident.username or name
+            title = f"✅ @{uname} 官方登记"
             desc = f"{ident.display_name or ''} · ID {ident.official_user_id or '—'}".strip(" ·")
             body = card_text(ident, bot_username=bot_name)
-            markup = card_kb(ident, bot_username=bot_name)
     except Exception:
         log.exception("inline resolve")
     finally:
         db.close()
+    markup = card_kb(username=uname, bot_username=bot_name)
     try:
         await q.answer(
             [
@@ -67,6 +64,7 @@ async def on_inline(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                         title=title,
                         description=desc,
                         input_message_content=InputTextMessageContent(body),
+                        reply_markup=markup,
                     )
                 ],
                 cache_time=0,
