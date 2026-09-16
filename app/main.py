@@ -43,7 +43,12 @@ async def lifespan(app: FastAPI):
     await platform_app.start()
     if WEBHOOK_BASE_URL:
         url = f"{WEBHOOK_BASE_URL}/wh/platform"
-        await platform_app.bot.set_webhook(url=url, secret_token=WEBHOOK_SECRET, drop_pending_updates=False)
+        await platform_app.bot.set_webhook(
+            url=url,
+            secret_token=WEBHOOK_SECRET,
+            drop_pending_updates=False,
+            allowed_updates=["message", "callback_query", "inline_query", "pre_checkout_query"],
+        )
         log.info("platform webhook %s", url)
     yield
     if platform_app:
