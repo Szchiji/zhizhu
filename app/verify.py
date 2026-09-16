@@ -6,23 +6,42 @@ from app.models import Identity
 
 
 def card_text(ident: Identity, *, watermark: bool = False, bot_username: str = "") -> str:
+    bot = (bot_username or "zhizhusp_bot").lstrip("@")
     name = ident.display_name or "—"
     uname = f"@{ident.username}" if ident.username else "—"
     uid = ident.official_user_id or "—"
     extra = (ident.card_text or "").strip()
     body = (
-        "✅  官方登记\n"
+        "✅  蜘蛛官方核验\n"
+        f"来源  @{bot}\n"
         "━━━━━━━━━━━━\n"
         f"姓名    {name}\n"
         f"账号    {uname}\n"
         f"ID      {uid}\n"
-        "━━━━━━━━━━━━"
+        "━━━━━━━━━━━━\n"
     )
     if extra:
-        body += f"\n{extra}"
-    else:
-        body += "\n仅以上登记为官方账号。"
+        body += extra + "\n\n"
+    body += (
+        "以上为官方登记，请谨防仿冒。\n"
+        f"查其他人：输入 @{bot} 加空格再加用户名"
+    )
     return body
+
+
+def promo_text(bot_username: str = "", name: str = "") -> str:
+    bot = (bot_username or "zhizhusp_bot").lstrip("@")
+    if name:
+        return (
+            f"@{name} 暂无官方登记\n\n"
+            "蜘蛛提供账号核验，避免被仿冒。\n"
+            f"开通后可生成带 @{bot} 来源标识的官方卡。"
+        )
+    return (
+        "蜘蛛 · 官方身份核验\n\n"
+        "在输入框输入要查的 @用户名，即可出官方登记卡。\n"
+        "开通后自己的账号也可生成同样的认证卡。"
+    )
 
 
 async def send_card(message, ident: Identity, *, bot=None, bot_username: str = "", share: str = "") -> None:
@@ -41,22 +60,22 @@ async def send_card(message, ident: Identity, *, bot=None, bot_username: str = "
 
 
 def alert_text(ident: Identity) -> str:
-    text = ident.alert_text or "此为官方登记账号"
+    text = ident.alert_text or "此为蜘蛛官方登记账号"
     uid = ident.official_user_id or ""
     uname = f"@{ident.username}" if ident.username else ""
     return f"{text}\n{uname}  {uid}".strip()[:200]
 
 
 def card_kb(ident: Identity, *, share_url: str = "", bot_username: str = "") -> InlineKeyboardMarkup:
+    bot = (bot_username or "zhizhusp_bot").lstrip("@")
     rows: list[list[InlineKeyboardButton]] = []
     row: list[InlineKeyboardButton] = []
     if ident.username:
-        row.append(InlineKeyboardButton("联系此账号", url=f"https://t.me/{ident.username.lstrip('@')}"))
-    if share_url:
-        row.append(InlineKeyboardButton("再次查询", url=share_url))
-    if row:
-        rows.append(row)
-    return InlineKeyboardMarkup(rows) if rows else InlineKeyboardMarkup([])
+        row.append(InlineKeyboardButton("联系登记账号", url=f"https://t.me/{ident.username.lstrip('@')}"))
+    row.append(InlineKeyboardButton("继续查询", switch_inline_query_current_chat=""))
+    rows.append(row)
+    rows.append([InlineKeyboardButton("开通官方核验", url=f"https://t.me/{bot}?start=pay")])
+    return InlineKeyboardMarkup(rows)
 
 
 def share_url(bot_username: str, tenant_id: int) -> str:
