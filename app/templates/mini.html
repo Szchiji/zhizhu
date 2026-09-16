@@ -100,11 +100,33 @@
         <div class="olist" id="olist">暂无</div>
       </div>
     </section>
+    <section id="tab-adm" class="hidden">
+      <div class="card">
+        <h1>管理</h1>
+        <p class="sub" id="aboard"></p>
+        <label>Stars 年付</label><input id="astars" type="number" />
+        <label>USDT 年付</label><input id="ausdt" type="number" />
+        <div class="btns">
+          <button onclick="setPrice('stars')">改 Stars</button>
+          <button class="usdt" onclick="setPrice('usdt')">改 USDT</button>
+        </div>
+        <label>收款地址</label><input id="aaddr" />
+        <div class="btns"><button class="ghost" onclick="setAddr()">保存地址</button><button class="ghost" onclick="toggleClone()" id="aclone">克隆</button></div>
+      </div>
+      <div class="card">
+        <h1>确认订单</h1>
+        <div class="olist" id="apend">暂无待确认</div>
+        <label>订单号</label><input id="acode" placeholder="VH-XXXXXX" />
+        <label>交易哈希（可空）</label><input id="atxid" />
+        <div class="btns"><button onclick="confirmOrder()">确认开通</button></div>
+      </div>
+    </section>
   </div>
   <div class="nav">
     <button class="on" id="n1" onclick="tab('pay')">开通</button>
     <button id="n2" onclick="tab('q')">查询</button>
     <button id="n3" onclick="tab('me')">我的</button>
+    <button id="n4" class="hidden" onclick="tab('adm')">管理</button>
   </div>
   <script>
     const tg = window.Telegram.WebApp; tg.ready(); tg.expand();
@@ -113,11 +135,13 @@
     const err = document.getElementById('err'), ok = document.getElementById('ok');
     function show(el, msg){ err.style.display='none'; ok.style.display='none'; el.style.display='block'; el.textContent=msg; }
     function tab(name){
-      ['pay','q','me'].forEach(n=>document.getElementById('tab-'+n).classList.toggle('hidden', n!==name));
+      ['pay','q','me','adm'].forEach(n=>document.getElementById('tab-'+n).classList.toggle('hidden', n!==name));
       document.getElementById('n1').classList.toggle('on', name==='pay');
       document.getElementById('n2').classList.toggle('on', name==='q');
       document.getElementById('n3').classList.toggle('on', name==='me');
+      document.getElementById('n4').classList.toggle('on', name==='adm');
       if(name==='me'){ loadMe(); loadOrders(); }
+      if(name==='adm') loadAdmin();
     }
     if(user){
       document.getElementById('uname').textContent = user.first_name + (user.last_name?(' '+user.last_name):'');
@@ -170,6 +194,7 @@
         document.getElementById('display').value=j.display_name||'';
         document.getElementById('card').value=j.card_text||'';
         document.getElementById('needpay').textContent=j.paid?'':'充值后才能保存资料';
+        if(j.is_admin) document.getElementById('n4').classList.remove('hidden');
       }catch(e){ show(err,e.message); }
     }
     async function loadOrders(){
@@ -180,6 +205,36 @@
         if(!j.orders||!j.orders.length){ el.textContent='暂无'; return; }
         el.innerHTML=j.orders.map(o=>'<div>'+o.created+' · '+o.rail+' · '+o.amount+' · '+o.status+(o.txid?(' · '+o.txid.slice(0,10)):'')+'</div>').join('');
       }catch(e){}
+    }
+    async function loadAdmin(){
+      try{
+        const j=await fetch('/api/mini/admin?user_id='+(user&&user.id||'')+'&init_data='+encodeURIComponent(initData)).then(r=>r.json());
+        if(j.error){ show(err,j.error); return; }
+        document.getElementById('aboard').textContent=j.board||'';
+        document.getElementById('astars').value=j.stars||'';
+        document.getElementById('ausdt').value=j.usdt||'';
+        document.getElementById('aaddr').value=j.address||'';
+        document.getElementById('aclone').textContent=j.clone?'克隆：开':'克隆：关';
+        const el=document.getElementById('apend');
+        el.innerHTML=(j.pending||[]).length?j.pending.map(o=>'<div onclick="document.getElementById(\'acode\').value=\''+o.code+'\'">'+o.code+' · '+o.amount+'U · '+o.status+'</div>').join(''):'暂无待确认';
+      }catch(e){ show(err,e.message); }
+    }
+    async function setPrice(rail){
+      const amount = rail==='stars'?document.getElementById('astars').value:document.getElementById('ausdt').value;
+      try{ await api('/api/mini/admin',{action:'price',rail:rail,amount:amount}); show(ok,'价格已更新'); loadAdmin(); }
+      catch(e){ show(err,e.message); }
+    }
+    async function setAddr(){
+      try{ await api('/api/mini/admin',{action:'addr',address:document.getElementById('aaddr').value}); show(ok,'地址已更新'); }
+      catch(e){ show(err,e.message); }
+    }
+    async function toggleClone(){
+      try{ const j=await api('/api/mini/admin',{action:'clone'}); show(ok,j.clone?'克隆已开':'克隆已关'); loadAdmin(); }
+      catch(e){ show(err,e.message); }
+    }
+    async function confirmOrder(){
+      try{ await api('/api/mini/admin',{action:'confirm',code:document.getElementById('acode').value,txid:document.getElementById('atxid').value}); show(ok,'订单已开通'); loadAdmin(); }
+      catch(e){ show(err,e.message); }
     }
     async function save(){
       try{ await api('/api/mini/profile', {display_name:document.getElementById('display').value, card_text:document.getElementById('card').value}); show(ok,'资料已保存'); loadMe(); }
