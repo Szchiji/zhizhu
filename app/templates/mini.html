@@ -122,7 +122,9 @@
         <label>添加：电报ID</label><input id="atgid" placeholder="数字ID" />
         <label>用户名</label><input id="auname" placeholder="username" />
         <label>姓名</label><input id="aname" placeholder="对外姓名" />
-        <div class="btns"><button onclick="addUser()">添加并开通一年</button></div>
+        <label>开通天数</label><input id="adays" type="number" value="365" min="1" max="3650" />
+        <div class="btns"><button class="ghost" onclick="document.getElementById('adays').value=15">15天</button><button class="ghost" onclick="document.getElementById('adays').value=90">90天</button><button class="ghost" onclick="document.getElementById('adays').value=365">一年</button></div>
+        <div class="btns"><button onclick="addUser()">添加并开通</button></div>
       </div>
       <div class="card">
         <h1>确认订单</h1>
@@ -229,16 +231,13 @@
         if(j.error){ show(err,j.error); return; }
         const el=document.getElementById('ulist');
         if(!j.users||!j.users.length){ el.textContent='未找到'; return; }
-        el.innerHTML=j.users.map(u=>'<div>@'+(u.username||'-')+' · '+(u.display_name||'')+' · '+u.tg_id+' · '+u.status+' · '+(u.paid_until||'')+
-          '<br><button class="ghost" style="margin-top:6px" onclick="userAct(\'user_block\','+u.tg_id+')">拉黑</button>'+
-          '<button class="ghost" onclick="userAct(\'user_unblock\','+u.tg_id+')">解除</button>'+
-          '<button class="ghost" onclick="userAct(\'user_delete\','+u.tg_id+')">删除</button></div>').join('');
+        el.innerHTML=j.users.map(u=>'<div>@'+(u.username||'-')+' · '+(u.display_name||'')+' · '+u.tg_id+' · '+u.status+' · '+(u.paid_until||'')+'<br><button class="ghost" style="margin-top:6px" onclick="userAct(\'user_block\','+u.tg_id+')">拉黑</button> <button class="ghost" onclick="userAct(\'user_unblock\','+u.tg_id+')">解除</button> <button class="ghost" onclick="userAct(\'user_delete\','+u.tg_id+')">删除</button></div>').join('');
       }catch(e){ show(err,e.message); }
     }
     async function addUser(){
       try{
-        await api('/api/mini/admin',{action:'user_add',tg_id:document.getElementById('atgid').value,username:document.getElementById('auname').value,display_name:document.getElementById('aname').value});
-        show(ok,'已添加并开通一年'); searchUsers();
+        await api('/api/mini/admin',{action:'user_add',tg_id:document.getElementById('atgid').value,username:document.getElementById('auname').value,display_name:document.getElementById('aname').value,days:document.getElementById('adays').value});
+        show(ok,'已开通 '+document.getElementById('adays').value+' 天'); searchUsers();
       }catch(e){ show(err,e.message); }
     }
     async function userAct(action,tg_id){
