@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="zh">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>VerifyHub 年付</title>
+</head>
+<body style="font-family:-apple-system,sans-serif;max-width:420px;margin:24px auto;padding:16px;">
+  <h1>VerifyHub 年付</h1>
+  <div>订单号 {{ order.public_code }}</div>
+  <div>状态 <b>{{ order.status }}</b></div>
+  <p style="font-size:32px;font-weight:700;">{{ amount }} USDT</p>
+  <div>网络 {{ chain }}</div>
+  <pre>{{ address }}</pre>
+  {% if order.status == 'active' %}
+    <p>已开通至 {{ order.period_end }}</p>
+  {% elif order.status in ['expired','failed','canceled'] %}
+    <p>订单已关闭，请回机器人重新下单。</p>
+  {% else %}
+    <p>请精确转账 {{ amount }} USDT，不要用合约代付。超时需重新下单。</p>
+  {% endif %}
+</body>
+</html>
