@@ -12,6 +12,7 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy import select
 from telegram import Bot, MenuButtonWebApp, Update, WebAppInfo
 
+from app.access import set_bot
 from app.admin_api import mount_admin
 from app.config import (
     ADMIN_TG_IDS,
@@ -85,6 +86,7 @@ async def lifespan(app: FastAPI):
         yield
         return
     platform_app = build_platform_app(PLATFORM_BOT_TOKEN)
+    set_bot(platform_app.bot)
     await platform_app.initialize()
     await platform_app.start()
     if WEBHOOK_BASE_URL:
@@ -284,14 +286,12 @@ async def mini_order(request: Request):
                 )
             )
             db.commit()
-            qr = f"https://api.qrserver.com/v1/create-qr-code/?size=200x200&data={addr}"
             return {
                 "ok": True,
                 "code": code,
                 "amount": f"{amount:g}",
                 "address": addr,
                 "chain": USDT_CHAIN,
-                "qr": qr,
             }
         price = plan_stars(db, key)
         payload = f"stars:{key}:{tenant.id}:{new_code()}"
