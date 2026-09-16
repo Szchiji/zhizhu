@@ -18,18 +18,18 @@ def card_text(ident: Identity, *, watermark: bool = False, bot_username: str = "
     extra = (ident.card_text or "").strip()
     brand = brand_name()
     lines = [
-        f"✅ {brand}官方认证",
-        f"本条由 @{bot} 出具",
-        "",
-        f"姓名    {name}",
-        f"账号    {uname}",
-        f"ID      {uid}",
+        f"✅  {brand}官方核验",
+        "━━━━━━━━━━━━",
+        f"来源：@{bot}",
+        "━━━━━━━━━━━━",
+        f"姓名：{name}",
+        f"账号：{uname}",
+        f"ID：{uid}",
+        "━━━━━━━━━━━━",
     ]
     if extra:
-        lines += ["", extra]
+        lines += [extra, ""]
     lines += [
-        "",
-        "——————",
         "谨防仿冒：以本机器人实时查询为准",
         f"群里输入  @{bot}  + 用户名",
         "自己也要官方卡：点下方「开通官方核验」",
@@ -42,17 +42,21 @@ def promo_text(bot_name: str = "", name: str = "") -> str:
     brand = brand_name()
     if name:
         return "\n".join([
+            f"✅  {brand}官方核验",
+            "━━━━━━━━━━━━",
+            f"来源：@{bot}",
+            "━━━━━━━━━━━━",
             f"@{name}  尚未登记",
-            f"本条由 @{bot} 出具",
-            "",
-            f"谨防仿冒：以本机器人实时查询为准",
+            "━━━━━━━━━━━━",
+            "谨防仿冒：以本机器人实时查询为准",
             f"群里输入  @{bot}  + 用户名",
             "自己也要官方卡：点下方「开通官方核验」",
         ])
     return "\n".join([
-        f"✅ {brand}官方认证",
-        f"本条由 @{bot} 出具",
-        "",
+        f"✅  {brand}官方核验",
+        "━━━━━━━━━━━━",
+        f"来源：@{bot}",
+        "━━━━━━━━━━━━",
         f"群里输入  @{bot}  + 用户名",
         "自己也要官方卡：点下方「开通官方核验」",
     ])
@@ -87,7 +91,7 @@ def card_kb(ident: Identity, *, share_url: str = "", bot_username: str = "") -> 
         row.append(InlineKeyboardButton("联系他", url=f"https://t.me/{ident.username.lstrip('@')}"))
     row.append(InlineKeyboardButton("再查一个", switch_inline_query_current_chat=""))
     rows.append(row)
-    rows.append([InlineKeyboardButton("开通官方核验", url=f"https://t.me/{bot}?start=pay")])
+    rows.append([InlineKeyboardButton("我也要官方认证", url=f"https://t.me/{bot}?start=pay")])
     return InlineKeyboardMarkup(rows)
 
 
