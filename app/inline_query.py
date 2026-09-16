@@ -19,32 +19,29 @@ async def on_inline(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         return
     bot_name = (context.bot.username or bot_username() or "bot").lstrip("@")
     brand = brand_name() or "官方核验"
-    name = parse_username(q.query or "")
-    ident = None
+    name = parse_username(q.query or "") or (q.query or "").strip().lstrip("@").split()[0] if (q.query or "").strip() else ""
+    title = f"查询 @{name}" if name else f"{brand}·官方核验"
+    desc = "点击发送查询结果" if name else "输入用户名查询"
+    body = promo_text(bot_name, name)
+    markup = InlineKeyboardMarkup(
+        [
+            [InlineKeyboardButton("查询更多", url=f"https://t.me/{bot_name}?start={'q'+name if name else 'ask'}")],
+            [InlineKeyboardButton("开通官方核验", url=f"https://t.me/{bot_name}?start=pay")],
+        ]
+    )
     db = get_session()
     try:
-        if name:
-            ident = await resolve_paid_identity(db, name, context.bot)
-    except Exception:
-        log.exception("inline resolve")
-    finally:
-        db.close()
-    try:
+        ident = await resolve_paid_identity(db, name, context.bot) if name else None
         if ident:
             title = f"✅ @{ident.username or name} 官方登记"
             desc = f"{ident.display_name or ''} · ID {ident.official_user_id or '—'}".strip(" ·")
             body = card_text(ident, bot_username=bot_name)
             markup = card_kb(ident, bot_username=bot_name)
-        else:
-            title = f"查询 @{name}" if name else f"{brand}·官方核验"
-            desc = "点击发送查询结果" if name else "输入用户名查询，或点击开通"
-            body = promo_text(bot_name, name)
-            markup = InlineKeyboardMarkup(
-                [
-                    [InlineKeyboardButton("查询更多", url=f"https://t.me/{bot_name}?start={'q_'+name if name else 'ask'}")],
-                    [InlineKeyboardButton("开通官方核验", url=f"https://t.me/{bot_name}?start=pay")],
-                ]
-            )
+    except Exception:
+        log.exception("inline resolve")
+    finally:
+        db.close()
+    try:
         await q.answer(
             [
                 InlineQueryResultArticle(
@@ -67,9 +64,9 @@ async def on_inline(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                 [
                     InlineQueryResultArticle(
                         id="fallback",
-                        title=f"{brand}查询",
-                        description="点击发送",
-                        input_message_content=InputTextMessageContent(promo_text(bot_name, name)),
+                        title=title,
+                        description=desc,
+                        input_message_content=InputTextMessageContent(body),
                     )
                 ],
                 cache_time=0,
