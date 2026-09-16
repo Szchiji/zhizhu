@@ -78,6 +78,25 @@ def parse_username(text: str) -> str:
     return token
 
 
+def fmt_until(dt) -> str:
+    if not dt:
+        return ""
+    return dt.strftime("%Y-%m-%d %H:%M")
+
+
+def find_paid_by_tg_id(db: Session, tg_id: int) -> Identity | None:
+    if not tg_id:
+        return None
+    ident = db.scalar(select(Identity).where(Identity.official_user_id == int(tg_id)))
+    tenant = db.get(Tenant, ident.tenant_id) if ident else None
+    if not tenant:
+        tenant = db.scalar(select(Tenant).where(Tenant.owner_tg_id == int(tg_id)))
+        ident = db.scalar(select(Identity).where(Identity.tenant_id == tenant.id)) if tenant else None
+    if ident and tenant and tenant_usable(tenant):
+        return ident
+    return None
+
+
 def find_paid_identity(db: Session, username: str) -> Identity | None:
     name = parse_username(username)
     if not name:
