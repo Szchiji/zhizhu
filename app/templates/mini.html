@@ -6,84 +6,170 @@
   <title>蜘蛛核验</title>
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
   <style>
-    :root { --bg:#0f172a; --card:#1e293b; --line:#334155; --text:#f8fafc; --muted:#94a3b8; --blue:#3b82f6; }
-    * { box-sizing: border-box; }
-    body { margin:0; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; background:var(--bg); color:var(--text); }
-    .top { padding:28px 20px 12px; }
-    .eyebrow { color:#60a5fa; font-size:12px; letter-spacing:.08em; }
-    h1 { margin:8px 0 6px; font-size:24px; }
-    .sub { color:var(--muted); font-size:14px; line-height:1.6; }
-    .list { padding:8px 16px 24px; display:flex; flex-direction:column; gap:12px; }
-    .card { background:var(--card); border:1px solid var(--line); border-radius:18px; padding:16px; }
-    .card h2 { margin:0 0 4px; font-size:18px; }
-    .price { font-size:20px; font-weight:700; margin:10px 0; }
-    .muted { color:var(--muted); font-size:13px; }
-    .btns { display:flex; gap:8px; margin-top:12px; }
-    button { flex:1; border:0; border-radius:12px; padding:12px 10px; font-size:14px; font-weight:600; color:#fff; }
+    :root {
+      --bg:#07111f; --card:rgba(18,32,54,.92); --line:rgba(255,255,255,.08);
+      --text:#f4f7fb; --muted:#8ea0b5; --blue:#3b82f6; --green:#12b981;
+    }
+    * { box-sizing:border-box; }
+    body {
+      margin:0; color:var(--text);
+      font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+      background:radial-gradient(1200px 500px at 10% -10%, #16345c 0%, transparent 55%), var(--bg);
+    }
+    .wrap { padding:18px 16px 96px; }
+    .user { display:flex; gap:12px; align-items:center; margin-bottom:18px; }
+    .av { width:44px; height:44px; border-radius:14px; background:#1e3a5f; display:flex; align-items:center; justify-content:center; font-weight:700; overflow:hidden; }
+    .av img { width:44px; height:44px; object-fit:cover; }
+    .hello { font-size:13px; color:var(--muted); }
+    .name { font-size:18px; font-weight:700; }
+    .card { background:var(--card); border:1px solid var(--line); border-radius:20px; padding:16px; margin-bottom:12px; }
+    h1 { font-size:22px; margin:0 0 6px; }
+    .sub { color:var(--muted); font-size:13px; line-height:1.6; }
+    .price { font-size:28px; font-weight:800; margin:14px 0 4px; }
+    .unit { font-size:14px; color:var(--muted); font-weight:500; }
+    .btns { display:flex; gap:8px; margin-top:14px; }
+    button { flex:1; border:0; border-radius:14px; padding:13px 10px; font-size:15px; font-weight:700; color:#fff; }
     .stars { background:var(--blue); }
-    .usdt { background:#0f766e; }
-    button:disabled { opacity:.5; }
-    .how { margin:8px 16px 40px; padding:16px; border-radius:18px; background:#111827; color:var(--muted); font-size:13px; line-height:1.7; }
-    .err { display:none; margin:0 16px 16px; padding:12px; border-radius:12px; background:#7f1d1d; color:#fecaca; font-size:13px; }
+    .usdt { background:var(--green); }
+    button:disabled { opacity:.45; }
+    input, textarea { width:100%; border:1px solid var(--line); background:#0b1728; color:var(--text); border-radius:12px; padding:12px; font-size:15px; margin:8px 0 0; }
+    textarea { min-height:88px; }
+    label { display:block; margin-top:12px; color:var(--muted); font-size:12px; }
+    .err,.ok { display:none; border-radius:12px; padding:10px 12px; font-size:13px; margin-bottom:12px; }
+    .err { background:#3f1d2a; color:#fecdd3; }
+    .ok { background:#113327; color:#bbf7d0; }
+    .mono { word-break:break-all; font-family:ui-monospace,monospace; background:#0b1728; padding:10px; border-radius:10px; }
+    .copy { width:auto; padding:8px 12px; background:#1e3a5f; }
+    .nav { position:fixed; left:12px; right:12px; bottom:12px; display:flex; gap:8px; background:#0c1a2e; border:1px solid var(--line); border-radius:18px; padding:6px; }
+    .nav button { background:transparent; color:var(--muted); font-size:13px; padding:10px; }
+    .nav button.on { background:#163154; color:#fff; }
+    .hidden { display:none; }
+    .pill { display:inline-block; font-size:12px; padding:4px 8px; border-radius:999px; background:#163154; color:#cfe3ff; }
+    .row { display:flex; justify-content:space-between; gap:8px; margin:8px 0; font-size:14px; }
   </style>
 </head>
 <body>
-  <div class="top">
-    <div class="eyebrow">ZHIZHU VERIFY</div>
-    <h1>开通官方核验</h1>
-    <p class="sub">选套餐即可支付。未开通也可在机器人里查已登记账号。</p>
-  </div>
-  <div id="err" class="err"></div>
-  <div class="list">
-    {% for p in plans %}
-    <div class="card">
-      <h2>{{ p.label }}</h2>
-      <div class="muted">{{ p.days_text }}</div>
-      <div class="price">{{ p.stars }}⭐  或  {{ p.usdt }} USDT</div>
-      <div class="btns">
-        <button class="stars" onclick="pay(this,'{{ p.key }}','stars')">Stars 支付</button>
-        <button class="usdt" onclick="pay(this,'{{ p.key }}','usdt')">USDT 支付</button>
+  <div class="wrap">
+    <div class="user">
+      <div class="av" id="av">?</div>
+      <div>
+        <div class="hello">电报账号登录</div>
+        <div class="name" id="uname">加载中…</div>
       </div>
     </div>
-    {% endfor %}
+    <div id="err" class="err"></div>
+    <div id="ok" class="ok"></div>
+    <section id="tab-pay">
+      <div class="card">
+        <div class="pill">年付套餐</div>
+        <h1>官方身份核验</h1>
+        <p class="sub">开通 365 天。资料保存在蜘蛛，他人可查你的官方登记。</p>
+        <div class="price">{{ stars }}⭐ <span class="unit">或 {{ usdt }} USDT</span></div>
+        <div class="btns">
+          <button class="stars" onclick="pay(this,'stars')">Stars 支付</button>
+          <button class="usdt" onclick="pay(this,'usdt')">USDT 支付</button>
+        </div>
+      </div>
+      <div id="checkout" class="card hidden">
+        <h1>转账支付</h1>
+        <p class="sub">请原额转账，20 分钟内到账后自动开通。</p>
+        <div class="row"><span>订单</span><b id="oid"></b></div>
+        <div class="row"><span>金额</span><b id="oamt"></b></div>
+        <div class="row"><span>网络</span><b id="ochain"></b></div>
+        <div class="mono" id="oaddr"></div>
+        <div class="btns"><button class="copy" onclick="copyAddr()">复制地址</button></div>
+      </div>
+    </section>
+    <section id="tab-me" class="hidden">
+      <div class="card">
+        <h1>我的账户</h1>
+        <p class="sub" id="status">查看开通与到期</p>
+        <div class="row"><span class="sub">套餐</span><b id="plan">—</b></div>
+        <div class="row"><span class="sub">到期</span><b id="until">—</b></div>
+      </div>
+      <div class="card">
+        <h1>登记资料</h1>
+        <label>对外姓名</label>
+        <input id="display" placeholder="显示名" />
+        <label>身份卡正文</label>
+        <textarea id="card" placeholder="留空则用默认格式"></textarea>
+        <div class="btns"><button class="stars" onclick="save()">保存</button></div>
+        <p class="sub" id="needpay"></p>
+      </div>
+    </section>
   </div>
-  <div class="how">
-    查询：回机器人发送 @用户名<br>
-    登记：付款成功后按提示保存资料
+  <div class="nav">
+    <button class="on" id="n1" onclick="tab('pay')">开通</button>
+    <button id="n2" onclick="tab('me')">我的</button>
   </div>
   <script>
     const tg = window.Telegram.WebApp;
     tg.ready(); tg.expand();
+    const user = (tg.initDataUnsafe && tg.initDataUnsafe.user) || null;
     const err = document.getElementById('err');
-    function show(msg) { err.style.display = 'block'; err.textContent = msg; }
-    async function pay(btn, plan, rail) {
-      const user = tg.initDataUnsafe && tg.initDataUnsafe.user;
-      if (!user || !user.id) { show('请从蜘蛛左下角「开通套餐」打开本页'); return; }
+    const ok = document.getElementById('ok');
+    function show(el, msg) { err.style.display='none'; ok.style.display='none'; el.style.display='block'; el.textContent = msg; }
+    function tab(name) {
+      document.getElementById('tab-pay').classList.toggle('hidden', name!=='pay');
+      document.getElementById('tab-me').classList.toggle('hidden', name!=='me');
+      document.getElementById('n1').classList.toggle('on', name==='pay');
+      document.getElementById('n2').classList.toggle('on', name==='me');
+      if (name==='me') loadMe();
+    }
+    if (user) {
+      document.getElementById('uname').textContent = user.first_name + (user.last_name ? ' '+user.last_name : '');
+      const av = document.getElementById('av');
+      if (user.photo_url) av.innerHTML = '<img src="'+user.photo_url+'">';
+      else av.textContent = (user.first_name || '?').slice(0,1);
+    } else {
+      document.getElementById('uname').textContent = '请从蜘蛛左下角打开';
+    }
+    async function api(path, body) {
+      const r = await fetch(path, { method: body ? 'POST' : 'GET', headers: {'Content-Type':'application/json'}, body: body ? JSON.stringify(body) : undefined });
+      const j = await r.json();
+      if (!r.ok || j.error) throw new Error(j.error || '请求失败');
+      return j;
+    }
+    async function pay(btn, rail) {
+      if (!user) { show(err, '请从机器人小程序打开'); return; }
       btn.disabled = true;
       try {
-        const r = await fetch('/api/mini/order', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ user_id: user.id, plan: plan, rail: rail })
-        });
-        const j = await r.json();
-        if (!r.ok || j.error) { show(j.error || '下单失败'); btn.disabled = false; return; }
+        const j = await api('/api/mini/order', { user_id: user.id, plan: 'year', rail: rail });
         if (j.invoice && tg.openInvoice) {
-          tg.openInvoice(j.invoice, function (st) {
-            if (st === 'paid') tg.close();
-            else btn.disabled = false;
-          });
-        } else if (j.url) {
-          tg.openLink(j.url);
-        } else {
-          show('未返回支付入口');
+          tg.openInvoice(j.invoice, function(st){ if (st==='paid') { show(ok,'支付成功'); loadMe(); } btn.disabled=false; });
+        } else if (j.address) {
+          document.getElementById('checkout').classList.remove('hidden');
+          document.getElementById('oid').textContent = j.code;
+          document.getElementById('oamt').textContent = j.amount + ' USDT';
+          document.getElementById('ochain').textContent = (j.chain || 'TRC20').toUpperCase();
+          document.getElementById('oaddr').textContent = j.address;
+          window._addr = j.address;
+          show(ok, '请按金额转账，到账后自动开通');
           btn.disabled = false;
         }
-      } catch (e) {
-        show('网络异常，请重试');
-        btn.disabled = false;
-      }
+      } catch (e) { show(err, e.message); btn.disabled = false; }
     }
+    function copyAddr() { if (window._addr) navigator.clipboard.writeText(window._addr).then(function(){ show(ok,'地址已复制'); }); }
+    async function loadMe() {
+      if (!user) return;
+      try {
+        const j = await api('/api/mini/me?user_id=' + user.id);
+        document.getElementById('status').textContent = j.paid ? '已开通' : '未开通，充值后可改资料';
+        document.getElementById('plan').textContent = j.plan_label || '—';
+        document.getElementById('until').textContent = j.paid_until || '—';
+        document.getElementById('display').value = j.display_name || '';
+        document.getElementById('card').value = j.card_text || '';
+        document.getElementById('needpay').textContent = j.paid ? '' : '充值后才能保存资料';
+      } catch (e) { show(err, e.message); }
+    }
+    async function save() {
+      if (!user) return;
+      try {
+        await api('/api/mini/profile', { user_id: user.id, display_name: document.getElementById('display').value, card_text: document.getElementById('card').value });
+        show(ok, '资料已保存'); loadMe();
+      } catch (e) { show(err, e.message); }
+    }
+    loadMe();
   </script>
 </body>
 </html>
