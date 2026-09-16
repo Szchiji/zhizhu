@@ -6,55 +6,44 @@
   <title>官方核验</title>
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
   <style>
-    :root {
-      --bg:#07090d;
-      --card:#10141c;
-      --line:rgba(212,175,55,.14);
-      --text:#f3efe4;
-      --muted:#8b8373;
-      --gold:#d4af37;
-      --gold2:#f1d48a;
-    }
+    :root { --bg:#07090d; --card:#10141c; --line:rgba(212,175,55,.14); --text:#f3efe4; --muted:#8b8373; --gold:#d4af37; --gold2:#f1d48a; }
     * { box-sizing:border-box; }
     html,body { margin:0; background:var(--bg); color:var(--text); font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
-    body { min-height:100vh; background:
-      radial-gradient(900px 420px at 80% -10%, rgba(212,175,55,.12), transparent 55%),
-      radial-gradient(700px 380px at -10% 110%, rgba(61,214,140,.06), transparent 50%),
-      var(--bg); }
+    body { min-height:100vh; background: radial-gradient(900px 420px at 80% -10%, rgba(212,175,55,.12), transparent 55%), var(--bg); }
     .wrap { padding:18px 16px 108px; max-width:480px; margin:0 auto; }
     .top { display:flex; align-items:center; gap:12px; margin-bottom:18px; }
     .av { width:46px; height:46px; border-radius:16px; overflow:hidden; background:#1b2230; display:flex; align-items:center; justify-content:center; font-weight:700; border:1px solid var(--line); }
     .av img { width:100%; height:100%; object-fit:cover; }
     .hello { font-size:11px; letter-spacing:.18em; text-transform:uppercase; color:var(--gold); }
     .name { font-size:18px; font-weight:650; margin-top:2px; }
-    .card { background:linear-gradient(180deg, rgba(255,255,255,.02), transparent 28%), var(--card); border:1px solid var(--line); border-radius:22px; padding:18px; margin-bottom:12px; }
+    .card { background:var(--card); border:1px solid var(--line); border-radius:22px; padding:18px; margin-bottom:12px; }
     .kicker { font-size:11px; letter-spacing:.16em; text-transform:uppercase; color:var(--gold); margin-bottom:8px; }
     h1 { font-size:22px; margin:0 0 6px; font-weight:680; }
     .sub { color:var(--muted); font-size:13px; line-height:1.65; }
-    .price { font-size:30px; font-weight:740; margin:14px 0 2px; letter-spacing:-.03em; }
+    .price { font-size:30px; font-weight:740; margin:14px 0 2px; }
     .price span { font-size:14px; color:var(--muted); font-weight:500; }
-    .btns { display:flex; gap:8px; margin-top:14px; }
+    .btns { display:flex; gap:8px; margin-top:14px; flex-wrap:wrap; }
     button { flex:1; border:0; border-radius:14px; padding:13px 10px; font-size:14px; font-weight:700; color:#1a1406; background:linear-gradient(180deg, var(--gold2), var(--gold)); }
     button.ghost { background:#171c26; color:var(--text); border:1px solid var(--line); }
     button.usdt { background:#143528; color:#d9ffe8; }
-    button:disabled { opacity:.45; }
     input, textarea { width:100%; border:1px solid var(--line); background:#0b0e14; color:var(--text); border-radius:14px; padding:13px 12px; font-size:15px; margin-top:8px; }
-    textarea { min-height:88px; resize:vertical; }
+    textarea { min-height:88px; }
     label { display:block; margin-top:12px; color:var(--muted); font-size:12px; }
     .err,.ok { display:none; border-radius:14px; padding:11px 12px; font-size:13px; margin-bottom:12px; }
     .err { background:#2a1518; color:#ffc4c8; }
     .ok { background:#10261c; color:#c6f6d8; }
     .mono { word-break:break-all; font-family:ui-monospace,Menlo,monospace; background:#0b0e14; padding:12px; border-radius:12px; border:1px solid var(--line); font-size:13px; }
-    .nav { position:fixed; left:12px; right:12px; bottom:14px; display:flex; gap:6px; background:rgba(12,16,24,.92); backdrop-filter:blur(16px); border:1px solid var(--line); border-radius:20px; padding:6px; }
+    .nav { position:fixed; left:12px; right:12px; bottom:14px; display:flex; gap:6px; background:rgba(12,16,24,.92); border:1px solid var(--line); border-radius:20px; padding:6px; }
     .nav button { background:transparent; color:var(--muted); font-size:12px; padding:11px 6px; }
     .nav button.on { background:#1a2110; color:var(--gold2); }
     .hidden { display:none; }
-    .pill { display:inline-flex; font-size:11px; letter-spacing:.08em; padding:5px 9px; border-radius:999px; background:#1a2110; color:var(--gold2); border:1px solid var(--line); }
+    .pill { display:inline-flex; font-size:11px; padding:5px 9px; border-radius:999px; background:#1a2110; color:var(--gold2); }
     .row { display:flex; justify-content:space-between; gap:8px; margin:10px 0; font-size:14px; }
     .row span { color:var(--muted); }
     .idcard { white-space:pre-wrap; line-height:1.75; font-size:14px; }
     .olist { font-size:13px; color:var(--muted); }
     .olist div { padding:10px 0; border-bottom:1px solid var(--line); }
+    .olist b { color:var(--text); }
     .stat { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:12px; }
     .stat b { display:block; font-size:15px; margin-top:4px; }
   </style>
@@ -63,10 +52,7 @@
   <div class="wrap">
     <div class="top">
       <div class="av" id="av">?</div>
-      <div>
-        <div class="hello">Official Desk</div>
-        <div class="name" id="uname">加载中…</div>
-      </div>
+      <div><div class="hello">Official Desk</div><div class="name" id="uname">加载中…</div></div>
     </div>
     <div id="err" class="err"></div>
     <div id="ok" class="ok"></div>
@@ -74,109 +60,49 @@
       <div class="card">
         <div class="kicker">Membership</div>
         <h1>官方身份核验</h1>
-        <p class="sub">开通后自动生成登记卡。查询、改资料、续费都在工作台完成。</p>
+        <p class="sub">开通后自动生成登记卡。查询、改资料、续费都在小程序完成。</p>
         <div class="price">{{ stars }}⭐ <span>或 {{ usdt }} USDT / 年</span></div>
-        <div class="btns">
-          <button onclick="pay(this,'stars')">Stars</button>
-          <button class="usdt" onclick="pay(this,'usdt')">USDT</button>
-        </div>
+        <div class="btns"><button onclick="pay(this,'stars')">Stars</button><button class="usdt" onclick="pay(this,'usdt')">USDT</button></div>
       </div>
       <div id="checkout" class="card hidden">
         <div class="kicker">Checkout</div>
         <h1>待支付</h1>
-        <p class="sub">复制地址后原额转账，到账自动开通并写入资料。</p>
-        <div class="row"><span>订单</span><b id="oid"></b></div>
+        <div class="row"><span>订单号</span><b id="oid"></b></div>
         <div class="row"><span>金额</span><b id="oamt"></b></div>
         <div class="row"><span>网络</span><b id="ochain"></b></div>
         <div class="mono" id="oaddr"></div>
-        <div class="btns">
-          <button class="ghost" onclick="copyAddr()">复制地址</button>
-          <button class="ghost" onclick="cancelPay()">取消</button>
-        </div>
+        <div class="btns"><button class="ghost" onclick="copyAddr()">复制地址</button><button class="ghost" onclick="cancelPay()">取消</button></div>
       </div>
     </section>
     <section id="tab-q" class="hidden">
-      <div class="card">
-        <div class="kicker">Lookup</div>
-        <h1>查询登记</h1>
-        <input id="q" placeholder="@username" />
-        <div class="btns"><button onclick="lookup()">查询</button></div>
-      </div>
-      <div id="qcard" class="card hidden">
-        <div class="pill">Verified</div>
-        <div class="idcard" id="qtext"></div>
-      </div>
+      <div class="card"><div class="kicker">Lookup</div><h1>查询登记</h1><input id="q" placeholder="@username" /><div class="btns"><button onclick="lookup()">查询</button></div></div>
+      <div id="qcard" class="card hidden"><div class="pill">Verified</div><div class="idcard" id="qtext"></div></div>
     </section>
     <section id="tab-me" class="hidden">
-      <div class="card">
-        <div class="kicker">Account</div>
-        <h1 id="status">—</h1>
-        <div class="stat">
-          <div class="sub">套餐<b id="plan">—</b></div>
-          <div class="sub">到期<b id="until">—</b></div>
-        </div>
-      </div>
-      <div class="card">
-        <div class="kicker">Profile</div>
-        <h1>登记资料</h1>
-        <p class="sub">用户名与 ID 跟随电报账号自动写入，姓名和正文可修改。</p>
-        <label>对外姓名</label><input id="display" />
-        <label>身份卡正文</label><textarea id="card"></textarea>
-        <div class="btns"><button onclick="save()">保存并生效</button></div>
-        <p class="sub" id="needpay"></p>
-      </div>
-      <div class="card">
-        <div class="kicker">Ledger</div>
-        <h1>订单记录</h1>
-        <div class="olist" id="olist">暂无</div>
-      </div>
+      <div class="card"><div class="kicker">Account</div><h1 id="status">—</h1><div class="stat"><div class="sub">套餐<b id="plan">—</b></div><div class="sub">到期<b id="until">—</b></div></div></div>
+      <div class="card"><div class="kicker">Profile</div><h1>登记资料</h1><label>对外姓名</label><input id="display" /><label>身份卡正文</label><textarea id="card"></textarea><div class="btns"><button onclick="save()">保存并生效</button></div><p class="sub" id="needpay"></p></div>
+      <div class="card"><div class="kicker">Ledger</div><h1>订单记录</h1><div class="olist" id="olist">暂无</div></div>
     </section>
     <section id="tab-adm" class="hidden">
+      <div class="card"><div class="kicker">Admin</div><h1>经营设置</h1><p class="sub" id="aboard"></p><label>Stars 年付</label><input id="astars" type="number" /><label>USDT 年付</label><input id="ausdt" type="number" /><div class="btns"><button onclick="setPrice('stars')">改 Stars</button><button class="usdt" onclick="setPrice('usdt')">改 USDT</button></div><label>收款地址</label><input id="aaddr" /><div class="btns"><button class="ghost" onclick="setAddr()">保存地址</button><button class="ghost" onclick="toggleClone()" id="aclone">克隆</button></div></div>
+      <div class="card"><h1>续费提醒</h1><label>提前天数</label><input id="rdays" type="number" value="7" /><label>提醒文案</label><textarea id="rtext"></textarea><div class="btns"><button class="ghost" onclick="saveRemind()">保存</button><button class="ghost" id="renable" onclick="toggleRemind()">提醒：开</button></div></div>
+      <div class="card"><h1>强制订阅</h1><label>频道</label><input id="achannel" placeholder="@channel 或 -100ID" /><div class="btns"><button class="ghost" onclick="saveChannel()">保存频道</button><button class="ghost" id="achon" onclick="toggleChannel()">强制订阅：关</button></div></div>
       <div class="card">
-        <div class="kicker">Admin</div>
-        <h1>经营设置</h1>
-        <p class="sub" id="aboard"></p>
-        <label>Stars 年付</label><input id="astars" type="number" />
-        <label>USDT 年付</label><input id="ausdt" type="number" />
-        <div class="btns">
-          <button onclick="setPrice('stars')">改 Stars</button>
-          <button class="usdt" onclick="setPrice('usdt')">改 USDT</button>
-        </div>
-        <label>收款地址</label><input id="aaddr" />
-        <div class="btns"><button class="ghost" onclick="setAddr()">保存地址</button><button class="ghost" onclick="toggleClone()" id="aclone">克隆</button></div>
-      </div>
-      <div class="card">
-        <h1>续费提醒</h1>
-        <p class="sub">到期前私信。文案可用 {until} {days}</p>
-        <label>提前天数</label><input id="rdays" type="number" value="7" min="0" max="90" />
-        <label>提醒文案</label><textarea id="rtext" placeholder="你的官方核验将于 {until} 到期"></textarea>
-        <div class="btns"><button class="ghost" onclick="saveRemind()">保存</button><button class="ghost" id="renable" onclick="toggleRemind()">提醒：开</button></div>
-      </div>
-      <div class="card">
-        <h1>强制订阅</h1>
-        <p class="sub">@频道名 或 -100频道ID。机器人需是频道管理员。</p>
-        <label>频道</label><input id="achannel" placeholder="@channel 或 -100xxxxxxxxxx" />
-        <div class="btns"><button class="ghost" onclick="saveChannel()">保存频道</button><button class="ghost" id="achon" onclick="toggleChannel()">强制订阅：关</button></div>
-      </div>
-      <div class="card">
-        <h1>用户</h1>
-        <input id="uq" placeholder="@用户名 或 电报ID" />
+        <h1>用户 / 补登记</h1>
+        <input id="uq" placeholder="@用户名 或 电报ID，空搜看最近用户" />
         <div class="btns"><button onclick="searchUsers()">搜索</button></div>
-        <div class="olist" id="ulist">输入后搜索</div>
+        <div class="olist" id="ulist">点搜索看已开通用户</div>
         <label>电报ID</label><input id="atgid" placeholder="数字ID" />
-        <label>用户名</label><input id="auname" placeholder="username" />
+        <label>用户名</label><input id="auname" placeholder="Q_7ge" />
         <label>姓名</label><input id="aname" placeholder="对外姓名" />
-        <label>开通天数</label><input id="adays" type="number" value="365" min="1" max="3650" />
-        <div class="btns">
-          <button class="ghost" onclick="document.getElementById('adays').value=15">15天</button>
-          <button class="ghost" onclick="document.getElementById('adays').value=90">90天</button>
-          <button class="ghost" onclick="document.getElementById('adays').value=365">一年</button>
-        </div>
-        <div class="btns"><button onclick="addUser()">添加并开通</button></div>
+        <label>开通天数</label><input id="adays" type="number" value="365" />
+        <div class="btns"><button onclick="bindUser()">补登记</button><button class="ghost" onclick="addUser()">添加并开通</button></div>
       </div>
       <div class="card">
         <h1>确认订单</h1>
         <div class="olist" id="apend">暂无待确认</div>
+        <p class="sub" style="margin-top:10px">最近订单</p>
+        <div class="olist" id="aorders">暂无</div>
         <label>订单号</label><input id="acode" placeholder="VH-XXXXXX" />
         <label>交易哈希（可空）</label><input id="atxid" />
         <div class="btns"><button onclick="confirmOrder()">确认开通</button></div>
@@ -197,12 +123,9 @@
     function show(el, msg){ err.style.display='none'; ok.style.display='none'; el.style.display='block'; el.textContent=msg; }
     function tab(name){
       ['pay','q','me','adm'].forEach(n=>document.getElementById('tab-'+n).classList.toggle('hidden', n!==name));
-      document.getElementById('n1').classList.toggle('on', name==='pay');
-      document.getElementById('n2').classList.toggle('on', name==='q');
-      document.getElementById('n3').classList.toggle('on', name==='me');
-      document.getElementById('n4').classList.toggle('on', name==='adm');
+      ['pay','q','me','adm'].forEach((n,i)=>document.getElementById('n'+(i+1)).classList.toggle('on', n===name));
       if(name==='me'){ loadMe(); loadOrders(); }
-      if(name==='adm') loadAdmin();
+      if(name==='adm'){ loadAdmin(); searchUsers(); }
     }
     if(user){
       document.getElementById('uname').textContent = user.first_name + (user.last_name?(' '+user.last_name):'');
@@ -219,17 +142,15 @@
       btn.disabled=true;
       try{
         const j = await api('/api/mini/order', {plan:'year', rail:rail});
-        if(j.invoice && tg.openInvoice){ tg.openInvoice(j.invoice, st=>{ if(st==='paid'){ show(ok,'支付成功，登记已生效'); loadMe(); tab('me'); } btn.disabled=false; }); }
+        if(j.invoice && tg.openInvoice){ tg.openInvoice(j.invoice, st=>{ if(st==='paid'){ show(ok,'支付成功'); loadMe(); tab('me'); } btn.disabled=false; }); }
         else if(j.address){
           document.getElementById('checkout').classList.remove('hidden');
           document.getElementById('oid').textContent=j.code;
           document.getElementById('oamt').textContent=j.amount+' USDT';
           document.getElementById('ochain').textContent=(j.chain||'TRC20').toUpperCase();
-          document.getElementById('oaddr').textContent=j.address;
-          window._addr=j.address;
-          show(ok,'复制地址原额转账，到账后自动刷新');
-          btn.disabled=false;
-          watchPaid();
+          document.getElementById('oaddr').textContent=j.address; window._addr=j.address;
+          show(ok,'订单号 '+j.code+' ，复制地址转账');
+          btn.disabled=false; watchPaid();
         }
       }catch(e){ show(err,e.message); btn.disabled=false; }
     }
@@ -238,29 +159,20 @@
         await new Promise(r=>setTimeout(r,5000));
         try{
           const j=await fetch('/api/mini/me?user_id='+user.id+'&init_data='+encodeURIComponent(initData)+'&username='+encodeURIComponent(user.username||'')+'&display_name='+encodeURIComponent(user.first_name||'')).then(r=>r.json());
-          if(j.paid){
-            document.getElementById('checkout').classList.add('hidden');
-            show(ok,'已开通，登记已生效');
-            loadMe(); loadOrders(); tab('me');
-            return;
-          }
+          if(j.paid){ document.getElementById('checkout').classList.add('hidden'); show(ok,'已开通，登记已生效'); loadMe(); loadOrders(); tab('me'); return; }
         }catch(e){}
       }
     }
     function copyAddr(){ if(window._addr) navigator.clipboard.writeText(window._addr).then(()=>show(ok,'地址已复制')); }
     async function cancelPay(){
-      try{
-        await api('/api/mini/cancel', {code: document.getElementById('oid').textContent});
-        document.getElementById('checkout').classList.add('hidden');
-        show(ok,'订单已取消');
-      }catch(e){ show(err,e.message); }
+      try{ await api('/api/mini/cancel', {code: document.getElementById('oid').textContent}); document.getElementById('checkout').classList.add('hidden'); show(ok,'订单已取消'); }
+      catch(e){ show(err,e.message); }
     }
     async function lookup(){
       const q=document.getElementById('q').value.trim();
       try{
         const j=await fetch('/api/mini/lookup?q='+encodeURIComponent(q)).then(r=>r.json());
-        const box=document.getElementById('qcard');
-        if(j.error){ show(err,j.error); return; }
+        const box=document.getElementById('qcard'); if(j.error){ show(err,j.error); return; }
         box.classList.remove('hidden');
         document.getElementById('qtext').textContent = j.found ? j.card : ('@'+(j.query||q)+' 暂无官方登记');
       }catch(e){ show(err,e.message); }
@@ -284,7 +196,7 @@
         const j=await fetch('/api/mini/orders?user_id='+user.id+'&init_data='+encodeURIComponent(initData)).then(r=>r.json());
         const el=document.getElementById('olist');
         if(!j.orders||!j.orders.length){ el.textContent='暂无'; return; }
-        el.innerHTML=j.orders.map(o=>'<div>'+o.created+' · '+o.rail+' · '+o.amount+' · '+o.status+(o.txid?(' · '+o.txid.slice(0,10)):'')+'</div>').join('');
+        el.innerHTML=j.orders.map(o=>'<div><b>'+(o.code||'')+'</b><br>'+o.created+' · '+o.rail+' · '+o.amount+' · '+o.status+(o.txid?(' · '+o.txid.slice(0,10)):'')+'</div>').join('');
       }catch(e){}
     }
     async function searchUsers(){
@@ -294,86 +206,42 @@
         if(j.error){ show(err,j.error); return; }
         const el=document.getElementById('ulist');
         if(!j.users||!j.users.length){ el.textContent='未找到'; return; }
-        el.innerHTML=j.users.map(u=>'<div>@'+(u.username||'-')+' · '+(u.display_name||'')+' · '+u.tg_id+' · '+u.status+' · '+(u.paid_until||'')+'<br><button class="ghost" style="margin-top:6px" onclick="userAct(\'user_block\','+u.tg_id+')">拉黑</button> <button class="ghost" onclick="userAct(\'user_unblock\','+u.tg_id+')">解除</button> <button class="ghost" onclick="userAct(\'user_delete\','+u.tg_id+')">删除</button></div>').join('');
+        el.innerHTML=j.users.map(u=>'<div>@'+(u.username||'无用户名')+' · '+(u.display_name||'')+' · ID '+u.tg_id+' · '+u.status+' · '+(u.paid_until||'')+'<br><button class="ghost" style="margin-top:6px" onclick="fillBind('+u.tg_id+',\''+(u.username||'')+'\',\''+(u.display_name||'')+'\')">补登记</button> <button class="ghost" onclick="userAct(\'user_block\','+u.tg_id+')">拉黑</button> <button class="ghost" onclick="userAct(\'user_unblock\','+u.tg_id+')">解除</button> <button class="ghost" onclick="userAct(\'user_delete\','+u.tg_id+')">删除</button></div>').join('');
       }catch(e){ show(err,e.message); }
     }
-    async function addUser(){
-      try{
-        await api('/api/mini/admin',{action:'user_add',tg_id:document.getElementById('atgid').value,username:document.getElementById('auname').value,display_name:document.getElementById('aname').value,days:document.getElementById('adays').value});
-        show(ok,'已开通 '+document.getElementById('adays').value+' 天'); searchUsers();
-      }catch(e){ show(err,e.message); }
-    }
-    async function userAct(action,tg_id){
-      try{ await api('/api/mini/admin',{action:action,tg_id:tg_id}); show(ok,'已处理'); searchUsers(); }
+    function fillBind(tg,uname,dname){ document.getElementById('atgid').value=tg||''; document.getElementById('auname').value=uname||''; document.getElementById('aname').value=dname||''; }
+    async function bindUser(){
+      try{ await api('/api/mini/admin',{action:'user_bind',tg_id:document.getElementById('atgid').value,username:document.getElementById('auname').value,display_name:document.getElementById('aname').value}); show(ok,'已补登记 @'+document.getElementById('auname').value); searchUsers(); }
       catch(e){ show(err,e.message); }
     }
+    async function addUser(){
+      try{ await api('/api/mini/admin',{action:'user_add',tg_id:document.getElementById('atgid').value,username:document.getElementById('auname').value,display_name:document.getElementById('aname').value,days:document.getElementById('adays').value}); show(ok,'已开通'); searchUsers(); }
+      catch(e){ show(err,e.message); }
+    }
+    async function userAct(action,tg_id){ try{ await api('/api/mini/admin',{action:action,tg_id:tg_id}); show(ok,'已处理'); searchUsers(); } catch(e){ show(err,e.message); } }
     async function loadAdmin(){
       try{
         const j=await fetch('/api/mini/admin?user_id='+(user&&user.id||'')+'&init_data='+encodeURIComponent(initData)).then(r=>r.json());
         if(j.error){ show(err,j.error); return; }
         document.getElementById('aboard').textContent=j.board||'';
-        document.getElementById('astars').value=j.stars||'';
-        document.getElementById('ausdt').value=j.usdt||'';
-        document.getElementById('aaddr').value=j.address||'';
+        document.getElementById('astars').value=j.stars||''; document.getElementById('ausdt').value=j.usdt||''; document.getElementById('aaddr').value=j.address||'';
         document.getElementById('aclone').textContent=j.clone?'克隆：开':'克隆：关';
-        document.getElementById('rdays').value=j.remind_days||7;
-        document.getElementById('rtext').value=j.remind_text||'';
-        window._remind=j.remind_enabled!=='0';
-        document.getElementById('renable').textContent=window._remind?'提醒：开':'提醒：关';
-        document.getElementById('achannel').value=j.force_channel||'';
-        window._ch=j.force_channel_on==='1';
-        document.getElementById('achon').textContent=window._ch?'强制订阅：开':'强制订阅：关';
-        const el=document.getElementById('apend');
-        el.innerHTML=(j.pending||[]).length?j.pending.map(o=>'<div onclick="document.getElementById(\'acode\').value=\''+o.code+'\'">'+o.code+' · '+o.amount+'U · '+o.status+'</div>').join(''):'暂无待确认';
+        document.getElementById('rdays').value=j.remind_days||7; document.getElementById('rtext').value=j.remind_text||'';
+        window._remind=j.remind_enabled!=='0'; document.getElementById('renable').textContent=window._remind?'提醒：开':'提醒：关';
+        document.getElementById('achannel').value=j.force_channel||''; window._ch=j.force_channel_on==='1'; document.getElementById('achon').textContent=window._ch?'强制订阅：开':'强制订阅：关';
+        document.getElementById('apend').innerHTML=(j.pending||[]).length?j.pending.map(o=>'<div onclick="document.getElementById(\'acode\').value=\''+o.code+'\'"><b>'+o.code+'</b> · '+o.amount+'U · '+o.status+'</div>').join(''):'暂无待确认';
+        document.getElementById('aorders').innerHTML=(j.orders||[]).length?j.orders.map(o=>'<div onclick="document.getElementById(\'acode\').value=\''+o.code+'\'"><b>'+o.code+'</b> · '+(o.rail||'')+' · '+o.amount+' · '+o.status+(o.tg_id?(' · TG '+o.tg_id):'')+'</div>').join(''):'暂无';
       }catch(e){ show(err,e.message); }
     }
-    async function setPrice(rail){
-      const amount = rail==='stars'?document.getElementById('astars').value:document.getElementById('ausdt').value;
-      try{ await api('/api/mini/admin',{action:'price',rail:rail,amount:amount}); show(ok,'价格已更新'); loadAdmin(); }
-      catch(e){ show(err,e.message); }
-    }
-    async function setAddr(){
-      try{ await api('/api/mini/admin',{action:'addr',address:document.getElementById('aaddr').value}); show(ok,'地址已更新'); }
-      catch(e){ show(err,e.message); }
-    }
-    async function saveRemind(){
-      try{
-        await api('/api/mini/admin',{action:'remind',days:document.getElementById('rdays').value,text:document.getElementById('rtext').value,enabled:window._remind?'1':'0'});
-        show(ok,'提醒设置已保存');
-      }catch(e){ show(err,e.message); }
-    }
-    async function toggleRemind(){
-      window._remind=!window._remind;
-      document.getElementById('renable').textContent=window._remind?'提醒：开':'提醒：关';
-      await saveRemind();
-    }
-    async function saveChannel(){
-      try{
-        const j=await api('/api/mini/admin',{action:'channel',channel:document.getElementById('achannel').value});
-        document.getElementById('achannel').value=j.force_channel||'';
-        show(ok,'频道已保存');
-      }catch(e){ show(err,e.message); }
-    }
-    async function toggleChannel(){
-      try{
-        const j=await api('/api/mini/admin',{action:'channel_toggle'});
-        window._ch=j.force_channel_on==='1';
-        document.getElementById('achon').textContent=window._ch?'强制订阅：开':'强制订阅：关';
-        show(ok,window._ch?'强制订阅已开':'强制订阅已关');
-      }catch(e){ show(err,e.message); }
-    }
-    async function toggleClone(){
-      try{ const j=await api('/api/mini/admin',{action:'clone'}); show(ok,j.clone?'克隆已开':'克隆已关'); loadAdmin(); }
-      catch(e){ show(err,e.message); }
-    }
-    async function confirmOrder(){
-      try{ await api('/api/mini/admin',{action:'confirm',code:document.getElementById('acode').value,txid:document.getElementById('atxid').value}); show(ok,'订单已开通'); loadAdmin(); }
-      catch(e){ show(err,e.message); }
-    }
-    async function save(){
-      try{ await api('/api/mini/profile', {display_name:document.getElementById('display').value, card_text:document.getElementById('card').value, username:user&&user.username}); show(ok,'资料已保存并生效'); loadMe(); }
-      catch(e){ show(err,e.message); }
-    }
+    async function setPrice(rail){ try{ await api('/api/mini/admin',{action:'price',rail:rail,amount:document.getElementById(rail==='stars'?'astars':'ausdt').value}); show(ok,'价格已更新'); loadAdmin(); }catch(e){ show(err,e.message); } }
+    async function setAddr(){ try{ await api('/api/mini/admin',{action:'addr',address:document.getElementById('aaddr').value}); show(ok,'地址已保存'); }catch(e){ show(err,e.message); } }
+    async function saveRemind(){ try{ await api('/api/mini/admin',{action:'remind',days:document.getElementById('rdays').value,text:document.getElementById('rtext').value,enabled:window._remind?'1':'0'}); show(ok,'提醒已保存'); }catch(e){ show(err,e.message); } }
+    async function toggleRemind(){ window._remind=!window._remind; document.getElementById('renable').textContent=window._remind?'提醒：开':'提醒：关'; saveRemind(); }
+    async function saveChannel(){ try{ await api('/api/mini/admin',{action:'channel',channel:document.getElementById('achannel').value,enabled:window._ch?'1':'0'}); show(ok,'频道已保存'); }catch(e){ show(err,e.message); } }
+    async function toggleChannel(){ window._ch=!window._ch; document.getElementById('achon').textContent=window._ch?'强制订阅：开':'强制订阅：关'; saveChannel(); }
+    async function toggleClone(){ try{ const j=await api('/api/mini/admin',{action:'clone'}); document.getElementById('aclone').textContent=j.clone?'克隆：开':'克隆：关'; }catch(e){ show(err,e.message); } }
+    async function confirmOrder(){ try{ await api('/api/mini/admin',{action:'confirm',code:document.getElementById('acode').value,txid:document.getElementById('atxid').value}); show(ok,'订单已确认'); loadAdmin(); }catch(e){ show(err,e.message); } }
+    async function save(){ try{ await api('/api/mini/profile',{display_name:document.getElementById('display').value,card_text:document.getElementById('card').value,username:user&&user.username}); show(ok,'资料已生效'); }catch(e){ show(err,e.message); } }
     loadMe();
   </script>
 </body>
