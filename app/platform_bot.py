@@ -18,29 +18,45 @@ from telegram.ext import (
 from app.config import (
     ADMIN_TG_IDS,
     PUBLIC_BASE_URL,
-    STARS_MONTHLY,
     TRIAL_DAYS,
     USDT_ADDRESS,
     USDT_CHAIN,
-    USDT_YEARLY,
     WEBHOOK_BASE_URL,
     WEBHOOK_SECRET,
 )
 from app.crypto_token import encrypt_token
 from app.db import get_session
 from app.models import Identity, Order, Tenant, utcnow
-from app.services import activate_order, add_event, get_or_create_tenant, new_code, open_order
+from app.services import (
+    activate_order,
+    add_event,
+    get_or_create_tenant,
+    get_setting,
+    new_code,
+    open_order,
+    set_setting,
+    stars_price,
+    usdt_price,
+)
 
 TOKEN_RE = __import__("re").compile(r"^\d{6,}:[A-Za-z0-9_-]{20,}$")
 
 
-def _kb_home() -> InlineKeyboardMarkup:
+def _is_admin(user_id: int) -> bool:
+    return bool(ADMIN_TG_IDS) and user_id in ADMIN_TG_IDS
+
+
+def _pay_address(db) -> str:
+    return get_setting(db, "usdt_address", USDT_ADDRESS)
+
+
+def _kb_home(stars: int, usdt: float) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         [
             [InlineKeyboardButton("开始试用 / 绑定机器人", callback_data="bind")],
             [
-                InlineKeyboardButton(f"Stars 月费 {STARS_MONTHLY}⭐", callback_data="pay_stars"),
-                InlineKeyboardButton(f"USDT 年付 {USDT_YEARLY:g}", callback_data="pay_usdt"),
+                InlineKeyboardButton(f"Stars 月费 {stars}⭐", callback_data="pay_stars"),
+                InlineKeyboardButton(f"USDT 年付 {usdt:g}", callback_data="pay_usdt"),
             ],
             [InlineKeyboardButton("我的状态", callback_data="status")],
         ]
@@ -60,7 +76,9 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             f"已付到：{tenant.paid_until or '—'}\n"
             f"绑定机器人：@{tenant.bot_username or '未绑定'}"
         )
-        await update.effective_message.reply_text(text, reply_markup=_kb_home())
+        await update.effective_message.reply_text(
+            text, reply_markup=_kb_home(stars_price(db), usdt_price(db))
+        )
     finally:
         db.close()
 
@@ -99,13 +117,14 @@ async def _create_stars(query, context, tenant: Tenant, db) -> None:
         await query.message.reply_text("你已有一笔待支付订单，请先完成或等待过期。")
         return
     payload = f"stars:{tenant.id}:{new_code()}"
+    price = stars_price(db)
     order = Order(
         public_code=new_code(),
         tenant_id=tenant.id,
         rail="stars",
         plan=tenant.plan or "pro",
         period_days=30,
-        amount=STARS_MONTHLY,
+        amount=price,
         currency="XTR",
         status="pending",
         payload=payload,
@@ -120,13 +139,14 @@ async def _create_stars(query, context, tenant: Tenant, db) -> None:
         payload=payload,
         provider_token="",
         currency="XTR",
-        prices=[LabeledPrice("30天", STARS_MONTHLY)],
+        prices=[LabeledPrice("30天", price)],
         subscription_period=2592000,
     )
 
 
 async def _create_usdt(query, tenant: Tenant, db) -> None:
-    if not USDT_ADDRESS:
+    addr = _pay_address(db)
+    if not addr:
         await query.message.reply_text("平台尚未配置 USDT 收款地址，请用 Stars 月费。")
         return
     if open_order(db, tenant.id):
@@ -134,24 +154,25 @@ async def _create_usdt(query, tenant: Tenant, db) -> None:
         return
     code = new_code()
     url = f"{PUBLIC_BASE_URL}/pay/usdt/{code}"
+    yearly = usdt_price(db)
     order = Order(
         public_code=code,
         tenant_id=tenant.id,
         rail="usdt",
         plan=tenant.plan or "pro",
         period_days=365,
-        amount=USDT_YEARLY,
+        amount=yearly,
         currency="USDT",
         chain=USDT_CHAIN,
         pay_url=url,
-        pay_address=USDT_ADDRESS,
+        pay_address=addr,
         status="pending",
         expires_at=utcnow() + timedelta(minutes=20),
     )
     db.add(order)
     db.commit()
     await query.message.reply_text(
-        f"已创建年付订单 {code}\n金额：{USDT_YEARLY:g} USDT（{USDT_CHAIN}）\n20 分钟内有效。\n{url}",
+        f"已创建年付订单 {code}\n金额：{yearly:g} USDT（{USDT_CHAIN}）\n20 分钟内有效。\n{url}",
         reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("打开收银台", url=url)]]),
     )
 
@@ -241,7 +262,7 @@ async def on_token(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             db.commit()
         await update.effective_message.reply_text(
             f"已绑定 @{tenant.bot_username}\nWebhook 已设置。\n默认官方 ID：{ident.official_user_id}",
-            reply_markup=_kb_home(),
+            reply_markup=_kb_home(stars_price(db), usdt_price(db)),
         )
     finally:
         db.close()
@@ -279,8 +300,85 @@ async def cmd_setname(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         db.close()
 
 
+async def cmd_prices(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    db = get_session()
+    try:
+        addr = _pay_address(db) or "未设置"
+        await update.effective_message.reply_text(
+            f"Stars 月费：{stars_price(db)}⭐\n"
+            f"USDT 年付：{usdt_price(db):g}\n"
+            f"收款地址：{addr}"
+        )
+    finally:
+        db.close()
+
+
+async def cmd_setprice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if not _is_admin(update.effective_user.id):
+        await update.effective_message.reply_text("只有平台创建者可以改价。先在 Railway 填 ADMIN_TG_IDS。")
+        return
+    if len(context.args) < 2:
+        await update.effective_message.reply_text(
+            "用法：\n/setprice stars 500\n/setprice usdt 99\n/prices 查看当前价格"
+        )
+        return
+    kind = context.args[0].lower()
+    raw = context.args[1]
+    db = get_session()
+    try:
+        if kind in {"stars", "star", "xtr"}:
+            try:
+                value = int(float(raw))
+            except ValueError:
+                await update.effective_message.reply_text("Stars 必须是整数，例如 /setprice stars 300")
+                return
+            if value < 1:
+                await update.effective_message.reply_text("Stars 至少 1")
+                return
+            set_setting(db, "stars_monthly", str(value))
+            await update.effective_message.reply_text(
+                f"Stars 月费已改为 {value}⭐，新订单立即生效。",
+                reply_markup=_kb_home(value, usdt_price(db)),
+            )
+            return
+        if kind in {"usdt", "u", "year"}:
+            try:
+                value = float(raw)
+            except ValueError:
+                await update.effective_message.reply_text("USDT 必须是数字，例如 /setprice usdt 79")
+                return
+            if value <= 0:
+                await update.effective_message.reply_text("USDT 必须大于 0")
+                return
+            set_setting(db, "usdt_yearly", f"{value:g}")
+            await update.effective_message.reply_text(
+                f"USDT 年付已改为 {value:g}，新订单立即生效。",
+                reply_markup=_kb_home(stars_price(db), value),
+            )
+            return
+        await update.effective_message.reply_text("只能改 stars 或 usdt。")
+    finally:
+        db.close()
+
+
+async def cmd_setaddr(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if not _is_admin(update.effective_user.id):
+        await update.effective_message.reply_text("只有平台创建者可以改收款地址。")
+        return
+    if not context.args:
+        await update.effective_message.reply_text("用法：/setaddr 你的TRC20地址")
+        return
+    addr = context.args[0].strip()
+    db = get_session()
+    try:
+        set_setting(db, "usdt_address", addr)
+        await update.effective_message.reply_text(f"USDT 收款地址已改为：{addr}")
+    finally:
+        db.close()
+
+
 async def cmd_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    if ADMIN_TG_IDS and update.effective_user.id not in ADMIN_TG_IDS:
+    if not _is_admin(update.effective_user.id):
         return
     if not context.args:
         await update.effective_message.reply_text("用法：/confirm VH-XXXXXX [txid]")
@@ -310,6 +408,9 @@ def build_platform_app(token: str) -> Application:
     app.add_handler(CommandHandler("setid", cmd_setid))
     app.add_handler(CommandHandler("setname", cmd_setname))
     app.add_handler(CommandHandler("confirm", cmd_confirm))
+    app.add_handler(CommandHandler("prices", cmd_prices))
+    app.add_handler(CommandHandler("setprice", cmd_setprice))
+    app.add_handler(CommandHandler("setaddr", cmd_setaddr))
     app.add_handler(CallbackQueryHandler(on_callback))
     app.add_handler(PreCheckoutQueryHandler(on_precheckout))
     app.add_handler(MessageHandler(filters.SUCCESSFUL_PAYMENT, on_successful_payment))
