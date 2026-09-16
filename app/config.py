@@ -21,6 +21,11 @@ TOKEN_ENC_KEY = os.getenv("TOKEN_ENC_KEY", "")
 ADMIN_TG_IDS = _ids(os.getenv("ADMIN_TG_IDS", ""))
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./zhizhu.sqlite3")
 
+BRAND_NAME = os.getenv("BRAND_NAME", "蜘蛛")
+BRAND_TITLE = os.getenv("BRAND_TITLE", "官方身份核验")
+BOT_USERNAME = os.getenv("BOT_USERNAME", "zhizhusp_bot").lstrip("@")
+MENU_TEXT = os.getenv("MENU_TEXT", "开通套餐")
+
 STARS_MONTHLY = int(os.getenv("STARS_MONTHLY", "500"))
 USDT_YEARLY = float(os.getenv("USDT_YEARLY", "99"))
 USDT_CHAIN = os.getenv("USDT_CHAIN", "trc20")
