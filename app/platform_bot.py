@@ -4,12 +4,20 @@ from datetime import timedelta
 
 import httpx
 from sqlalchemy import select
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, LabeledPrice, Update
+from telegram import (
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    InlineQueryResultArticle,
+    InputTextMessageContent,
+    LabeledPrice,
+    Update,
+)
 from telegram.ext import (
     Application,
     CallbackQueryHandler,
     CommandHandler,
     ContextTypes,
+    InlineQueryHandler,
     MessageHandler,
     PreCheckoutQueryHandler,
     filters,
@@ -32,12 +40,14 @@ from app.services import (
     add_event,
     get_or_create_tenant,
     get_setting,
+    is_staff,
     new_code,
     open_order,
     set_setting,
     stars_price,
     usdt_price,
 )
+from app.verify import card_kb, card_text, share_url
 
 TOKEN_RE = __import__("re").compile(r"^\d{6,}:[A-Za-z0-9_-]{20,}$")
 
@@ -66,11 +76,21 @@ def _kb_home(stars: int, usdt: float) -> InlineKeyboardMarkup:
 async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     db = get_session()
     try:
-        tenant = get_or_create_tenant(db, update.effective_user.id)
+        user = update.effective_user
+        tenant = get_or_create_tenant(db, user.id)
+        if tenant.identity:
+            if user.username:
+                tenant.identity.username = user.username
+            if not tenant.identity.official_user_id:
+                tenant.identity.official_user_id = user.id
+            if not tenant.identity.display_name:
+                tenant.identity.display_name = user.full_name
+            db.commit()
         text = (
             "官方身份核验平台\n\n"
-            "7 天试用：把你自己的 Bot Token 发给我，即可克隆出核验机器人。\n"
-            "别人把可疑私聊转发到你的机器人，就能判断是不是本人。\n\n"
+            "直接用本机器人核验，不用提交自己的 Bot Token。\n"
+            "在任何对话输入 @"
+            f"{context.bot.username or 'zhizhusp_bot'} 加空格，点出现的核验卡即可发给朋友。\n\n"
             f"当前状态：{tenant.status}\n"
             f"试用截止：{tenant.trial_ends_at}\n"
             f"已付到：{tenant.paid_until or '—'}\n"
@@ -87,6 +107,44 @@ async def cmd_status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
     await cmd_start(update, context)
 
 
+async def on_inline(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    q = update.inline_query
+    db = get_session()
+    try:
+        user = q.from_user
+        tenant = get_or_create_tenant(db, user.id)
+        if tenant.identity:
+            if user.username:
+                tenant.identity.username = user.username
+            if not tenant.identity.official_user_id:
+                tenant.identity.official_user_id = user.id
+            if not tenant.identity.display_name:
+                tenant.identity.display_name = user.full_name
+            db.commit()
+        ident = tenant.identity or Identity()
+        bot_name = context.bot.username or "zhizhusp_bot"
+        url = share_url(bot_name, tenant.id)
+        await q.answer(
+            [
+                InlineQueryResultArticle(
+                    id=f"card-{tenant.id}",
+                    title=f"{ident.display_name or '官方身份'} · 核验卡",
+                    description="点击发送官方身份核验卡",
+                    input_message_content=InputTextMessageContent(
+                        card_text(ident, watermark=True, bot_username=bot_name)
+                    ),
+                    reply_markup=card_kb(ident, share_url=url, bot_username=bot_name),
+                )
+            ],
+            cache_time=1,
+            is_personal=True,
+        )
+    except Exception:
+        await q.answer([], cache_time=1)
+    finally:
+        db.close()
+
+
 async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     query = update.callback_query
     await query.answer()
@@ -96,17 +154,27 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         tenant = get_or_create_tenant(db, query.from_user.id)
         if data == "bind":
             await query.message.reply_text(
-                "1. 打开 @BotFather\n2. 发送 /newbot\n3. 把 Token 在本对话发给我\n\nToken 会加密保存，消息随后删除。"
+                "独立品牌机器人是可选项。平时直接用 @"
+                f"{context.bot.username or 'zhizhusp_bot'} 发卡即可。\n\n"
+                "如要自己的机器人：\n1. 打开 @BotFather\n2. 发送 /newbot\n3. 把 Token 发到本对话"
             )
             return
         if data == "status":
             await cmd_start(update, context)
             return
         if data == "pay_stars":
+            if is_staff(query.from_user.id):
+                await query.message.reply_text("管理员账号免费，不用付费。")
+                return
             await _create_stars(query, context, tenant, db)
             return
         if data == "pay_usdt":
+            if is_staff(query.from_user.id):
+                await query.message.reply_text("管理员账号免费，不用付费。")
+                return
             await _create_usdt(query, tenant, db)
+            return
+        if data == "info":
             return
     finally:
         db.close()
@@ -239,7 +307,7 @@ async def on_token(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         tenant.bot_id = me["id"]
         tenant.bot_username = me.get("username")
         tenant.bot_token_enc = encrypt_token(text)
-        if not tenant.trial_ends_at:
+        if not tenant.trial_ends_at and not is_staff(update.effective_user.id):
             tenant.trial_ends_at = utcnow() + timedelta(days=TRIAL_DAYS)
         db.commit()
         if WEBHOOK_BASE_URL:
@@ -293,6 +361,8 @@ async def cmd_setname(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         tenant = get_or_create_tenant(db, update.effective_user.id)
         ident = tenant.identity or Identity(tenant_id=tenant.id)
         ident.display_name = " ".join(context.args)
+        if update.effective_user.username:
+            ident.username = update.effective_user.username
         db.add(ident)
         db.commit()
         await update.effective_message.reply_text(f"显示名已设为 {ident.display_name}")
@@ -411,6 +481,7 @@ def build_platform_app(token: str) -> Application:
     app.add_handler(CommandHandler("prices", cmd_prices))
     app.add_handler(CommandHandler("setprice", cmd_setprice))
     app.add_handler(CommandHandler("setaddr", cmd_setaddr))
+    app.add_handler(InlineQueryHandler(on_inline))
     app.add_handler(CallbackQueryHandler(on_callback))
     app.add_handler(PreCheckoutQueryHandler(on_precheckout))
     app.add_handler(MessageHandler(filters.SUCCESSFUL_PAYMENT, on_successful_payment))
