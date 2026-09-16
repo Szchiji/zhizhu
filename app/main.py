@@ -23,10 +23,18 @@ from app.config import (
 )
 from app.crypto_token import decrypt_token
 from app.db import get_session, init_db
-from app.models import Order, Tenant, utcnow
+from app.models import Identity, Order, Tenant, utcnow
 from app.plans import PLANS, plan_stars, plan_usdt
 from app.platform_bot import build_platform_app
-from app.services import activate_order, add_event, get_or_create_tenant, get_setting, new_code, open_order
+from app.services import (
+    activate_order,
+    add_event,
+    get_or_create_tenant,
+    get_setting,
+    new_code,
+    open_order,
+    tenant_usable,
+)
 from app.tenant_bot import handle_tenant_update
 from app.usdt_watch import watch_loop
 
@@ -34,12 +42,6 @@ logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("zhizhu")
 templates = Jinja2Templates(directory="app/templates")
 platform_app = None
-
-
-def _days_text(days: int) -> str:
-    if days >= 10000:
-        return "长期有效"
-    return f"{days} 天"
 
 
 def _drop_open_orders(db, tenant_id: int) -> None:
@@ -111,17 +113,61 @@ async def root():
 async def mini(request: Request):
     db = get_session()
     try:
-        plans = [
-            {
-                "key": key,
-                "label": meta["label"],
-                "days_text": _days_text(meta["days"]),
-                "stars": plan_stars(db, key),
-                "usdt": f"{plan_usdt(db, key):g}",
-            }
-            for key, meta in PLANS.items()
-        ]
-        return templates.TemplateResponse(request, "mini.html", {"plans": plans, "bot": "zhizhusp_bot"})
+        return templates.TemplateResponse(
+            request,
+            "mini.html",
+            {"stars": plan_stars(db, "year"), "usdt": f"{plan_usdt(db, 'year'):g}"},
+        )
+    finally:
+        db.close()
+
+
+@app.get("/api/mini/me")
+async def mini_me(user_id: int = 0):
+    if not user_id:
+        return JSONResponse({"error": "未登录"}, status_code=401)
+    db = get_session()
+    try:
+        tenant = get_or_create_tenant(db, user_id)
+        ident = tenant.identity
+        paid = tenant_usable(tenant)
+        until = tenant.paid_until.strftime("%Y-%m-%d %H:%M") if tenant.paid_until else ("管理员" if paid else "")
+        return {
+            "ok": True,
+            "paid": paid,
+            "plan": tenant.plan,
+            "plan_label": PLANS.get(tenant.plan, {}).get("label", tenant.plan or "—"),
+            "paid_until": until or "—",
+            "username": ident.username if ident else "",
+            "display_name": ident.display_name if ident else "",
+            "card_text": ident.card_text if ident else "",
+        }
+    finally:
+        db.close()
+
+
+@app.post("/api/mini/profile")
+async def mini_profile(request: Request):
+    body = await request.json()
+    try:
+        user_id = int(body.get("user_id") or 0)
+    except (TypeError, ValueError):
+        user_id = 0
+    if not user_id:
+        return JSONResponse({"error": "未登录"}, status_code=401)
+    db = get_session()
+    try:
+        tenant = get_or_create_tenant(db, user_id)
+        if not tenant_usable(tenant):
+            return JSONResponse({"error": "开通后才能修改资料"}, status_code=403)
+        ident = tenant.identity or Identity(tenant_id=tenant.id)
+        if "display_name" in body:
+            ident.display_name = str(body.get("display_name") or "")[:64]
+        if "card_text" in body:
+            ident.card_text = str(body.get("card_text") or "")[:2000]
+        db.add(ident)
+        db.commit()
+        return {"ok": True}
     finally:
         db.close()
 
@@ -133,10 +179,12 @@ async def mini_order(request: Request):
         user_id = int(body.get("user_id") or 0)
     except (TypeError, ValueError):
         user_id = 0
-    key = str(body.get("plan") or "")
+    key = str(body.get("plan") or "year")
     rail = str(body.get("rail") or "stars")
-    if not user_id or key not in PLANS:
-        raise HTTPException(400, detail="bad plan")
+    if key not in PLANS:
+        key = "year"
+    if not user_id:
+        raise HTTPException(400, detail="bad user")
     if not PLATFORM_BOT_TOKEN:
         raise HTTPException(503, detail="bot not ready")
     db = get_session()
@@ -148,7 +196,6 @@ async def mini_order(request: Request):
             if not addr:
                 return JSONResponse({"error": "尚未配置 USDT 地址"}, status_code=400)
             code = new_code()
-            url = f"{(PUBLIC_BASE_URL or WEBHOOK_BASE_URL).rstrip('/')}/pay/usdt/{code}"
             amount = plan_usdt(db, key)
             db.add(
                 Order(
@@ -160,14 +207,13 @@ async def mini_order(request: Request):
                     amount=amount,
                     currency="USDT",
                     chain=USDT_CHAIN,
-                    pay_url=url,
                     pay_address=addr,
                     status="pending",
                     expires_at=utcnow() + timedelta(minutes=20),
                 )
             )
             db.commit()
-            return {"ok": True, "url": url}
+            return {"ok": True, "code": code, "amount": f"{amount:g}", "address": addr, "chain": USDT_CHAIN}
         price = plan_stars(db, key)
         payload = f"stars:{key}:{tenant.id}:{new_code()}"
         db.add(
