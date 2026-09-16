@@ -6,20 +6,37 @@ from datetime import datetime, timedelta
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.config import PLAN_DEFAULT, STARS_MONTHLY, TRIAL_DAYS, USDT_YEARLY
+from app.config import ADMIN_TG_IDS, PLAN_DEFAULT, STARS_MONTHLY, TRIAL_DAYS, USDT_YEARLY
 from app.models import Identity, Order, OrderEvent, Setting, Tenant, utcnow
+
+
+def is_staff(tg_id: int | None) -> bool:
+    return bool(tg_id) and bool(ADMIN_TG_IDS) and int(tg_id) in ADMIN_TG_IDS
+
+
+def mark_staff_tenant(db: Session, tenant: Tenant) -> Tenant:
+    if not is_staff(tenant.owner_tg_id) or tenant.status == "suspended":
+        return tenant
+    if tenant.status != "owner" or tenant.plan != "owner":
+        tenant.status = "owner"
+        tenant.plan = "owner"
+        db.commit()
+    return tenant
 
 
 def get_or_create_tenant(db: Session, owner_tg_id: int) -> Tenant:
     tenant = db.scalar(select(Tenant).where(Tenant.owner_tg_id == owner_tg_id))
     if tenant:
-        return tenant
-    tenant = Tenant(
-        owner_tg_id=owner_tg_id,
-        status="trial",
-        plan=PLAN_DEFAULT,
-        trial_ends_at=utcnow() + timedelta(days=TRIAL_DAYS),
-    )
+        return mark_staff_tenant(db, tenant)
+    if is_staff(owner_tg_id):
+        tenant = Tenant(owner_tg_id=owner_tg_id, status="owner", plan="owner")
+    else:
+        tenant = Tenant(
+            owner_tg_id=owner_tg_id,
+            status="trial",
+            plan=PLAN_DEFAULT,
+            trial_ends_at=utcnow() + timedelta(days=TRIAL_DAYS),
+        )
     db.add(tenant)
     db.flush()
     db.add(Identity(tenant_id=tenant.id, alert_text="这是公示的官方账号，只认这一个号"))
@@ -32,6 +49,8 @@ def tenant_usable(tenant: Tenant, at: datetime | None = None) -> bool:
     at = at or utcnow()
     if tenant.status == "suspended":
         return False
+    if tenant.status == "owner" or is_staff(tenant.owner_tg_id):
+        return True
     if tenant.trial_ends_at and at < tenant.trial_ends_at:
         return True
     if tenant.paid_until and at < tenant.paid_until:
@@ -104,7 +123,8 @@ def activate_order(db: Session, order: Order) -> Tenant:
             base = ts
     period_end = base + timedelta(days=order.period_days)
     tenant.paid_until = period_end
-    tenant.status = "active"
+    if tenant.status != "owner":
+        tenant.status = "active"
     tenant.plan = order.plan
     order.paid_at = utcnow()
     order.period_start = base
