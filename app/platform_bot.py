@@ -40,7 +40,6 @@ from app.services import (
     find_paid_identity,
     get_or_create_tenant,
     get_setting,
-    is_staff,
     new_code,
     open_order,
     parse_username,
@@ -120,10 +119,10 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         else:
             text = (
                 "官方身份核验平台\n\n"
-                "未充值：在任意对话输入 @"
-                f"{_bot(context)} 核验 @用户名\n"
-                "点击后会跳进本机器人，按用户名查已充值用户存档的官方资料。\n\n"
-                "充值后才能在这里登记自己的官方身份。"
+                "未充值可直接在本对话发送：核验 @用户名\n"
+                "或在别的对话输入 @"
+                f"{_bot(context)} 加空格，点出现的结果。\n\n"
+                "充值后才能登记自己的官方身份。"
             )
         await update.effective_message.reply_text(
             text, reply_markup=_kb_home(stars_price(db), usdt_price(db), paid)
@@ -139,37 +138,20 @@ async def cmd_status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
 
 async def on_inline(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     q = update.inline_query
-    db = get_session()
-    try:
-        raw = (q.query or "").strip()
-        name = parse_username(raw)
-        param = f"q_{name}" if name else "q"
-        bot_name = _bot(context)
-        start = f"https://t.me/{bot_name}?start={param}"
-        title = f"查询 @{name}" if name else "打开机器人核验用户名"
-        await q.answer(
-            [
-                InlineQueryResultArticle(
-                    id="lookup",
-                    title=title,
-                    description="跳转到机器人，查已充值用户保存的官方资料",
-                    input_message_content=InputTextMessageContent(
-                        f"点下方按钮打开机器人查询 {('@' + name) if name else '用户名'}"
-                    ),
-                    reply_markup=InlineKeyboardMarkup(
-                        [[InlineKeyboardButton("打开机器人查询", url=start)]]
-                    ),
-                )
-            ],
-            cache_time=1,
-            is_personal=True,
-            switch_pm_text="打开机器人查询",
-            switch_pm_parameter=param[:64],
-        )
-    except Exception:
-        await q.answer([], cache_time=1)
-    finally:
-        db.close()
+    raw = (q.query or "").strip()
+    name = parse_username(raw)
+    param = f"q_{name}" if name else "q"
+    bot_name = _bot(context)
+    start = f"https://t.me/{bot_name}?start={param}"
+    title = f"核验 @{name}" if name else "打开蜘蛛核验"
+    result = InlineQueryResultArticle(
+        id=(q.id or "r1")[:64],
+        title=title,
+        description="点击后发到对话，再点链接进入机器人查询",
+        input_message_content=InputTextMessageContent(start),
+        url=start,
+    )
+    await q.answer([result], cache_time=0, is_personal=True)
 
 
 async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -314,6 +296,8 @@ async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         return
     name = parse_username(text)
     if not name:
+        if "核验" in text:
+            await update.effective_message.reply_text("请发送要核验的用户名，例如 @miss_maomi")
         return
     db = get_session()
     try:
