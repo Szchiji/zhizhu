@@ -129,7 +129,7 @@ def home_kb(cfg: dict, *, bot: str = "", mini: str = "") -> InlineKeyboardMarkup
     return InlineKeyboardMarkup(rows)
 
 
-def render_start(db, tenant, ident=None, *, bot: str = "") -> tuple[str, InlineKeyboardMarkup]:
+def render_start(db, tenant, ident=None, *, bot: str = "", admin: bool = False) -> tuple[str, InlineKeyboardMarkup]:
     cfg = load_home(db)
     paid = tenant_usable(tenant)
     bot = (bot or bot_username()).lstrip("@")
@@ -148,7 +148,12 @@ def render_start(db, tenant, ident=None, *, bot: str = "") -> tuple[str, InlineK
         username=uname,
         name=name,
     )
-    return text, home_kb(cfg, bot=bot)
+    kb = home_kb(cfg, bot=bot)
+    if admin:
+        rows = list(kb.inline_keyboard)
+        rows.append([InlineKeyboardButton("管理员", callback_data="admin")])
+        kb = InlineKeyboardMarkup(rows)
+    return text, kb
 
 
 def render_help(db, *, bot: str = "") -> str:
