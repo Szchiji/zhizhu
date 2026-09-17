@@ -10,7 +10,7 @@ from app.brand import brand_name, bot_username
 from app.config import PUBLIC_BASE_URL, WEBHOOK_BASE_URL
 from app.db import get_session
 from app.services import parse_username, resolve_paid_identity
-from app.verify import card_kb, card_text, promo_text
+from app.verify import card_kb, card_text, issuer_kb, issuer_text, is_platform_bot, promo_text
 
 log = logging.getLogger("zhizhu.inline")
 
@@ -66,20 +66,26 @@ async def on_inline(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     title = f"查询 @{name}" if name else f"{brand}·官方核验"
     desc = "点击发送官方卡" if name else "输入用户名查询"
     body = promo_text(bot_name, name)
-    uname = name
-    db = get_session()
-    try:
-        ident = await resolve_paid_identity(db, name, context.bot) if name else None
-        if ident:
-            uname = ident.username or name
-            title = f"✅ @{uname} 官方登记"
-            desc = f"{ident.display_name or ''} · ID {ident.official_user_id or '—'}".strip(" ·")
-            body = card_text(ident, bot_username=bot_name)
-    except Exception:
-        log.exception("inline resolve")
-    finally:
-        db.close()
-    markup = card_kb(username=uname, bot_username=bot_name)
+    markup = card_kb(username=name, bot_username=bot_name)
+    if name and is_platform_bot(name, bot_name):
+        title = f"🛡️ {brand} 官方出具方"
+        desc = "本账号为核验机器人"
+        body = issuer_text(bot_name)
+        markup = issuer_kb(bot_name)
+    else:
+        db = get_session()
+        try:
+            ident = await resolve_paid_identity(db, name, context.bot) if name else None
+            if ident:
+                name = ident.username or name
+                title = f"✅ @{name} 官方登记"
+                desc = f"{ident.display_name or ''} · ID {ident.official_user_id or '—'}".strip(" ·")
+                body = card_text(ident, bot_username=bot_name)
+                markup = card_kb(ident, bot_username=bot_name)
+        except Exception:
+            log.exception("inline resolve")
+        finally:
+            db.close()
     item = _article(
         thumb,
         id=(q.id or "r1")[:64],
@@ -93,10 +99,6 @@ async def on_inline(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     except Exception:
         log.exception("inline answer")
         try:
-            await q.answer(
-                [_article(thumb, id="fallback", title=title, description=desc, input_message_content=InputTextMessageContent(body), reply_markup=markup)],
-                cache_time=0,
-                is_personal=True,
-            )
+            await q.answer([item], cache_time=0, is_personal=True)
         except Exception:
             log.exception("inline fallback")
