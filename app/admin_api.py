@@ -12,7 +12,7 @@ from app.db import get_session
 from app.home import load_home, save_home
 from app.models import Identity, Order, Tenant, utcnow
 from app.plans import clone_on, plan_stars, plan_usdt, price_board, set_clone
-from app.services import activate_order, add_event, get_or_create_tenant, get_setting, open_order, parse_username, set_setting
+from app.services import activate_order, add_event, fmt_until, get_or_create_tenant, get_setting, open_order, parse_username, set_setting
 from app.tg_webapp import user_id_from_init
 
 
@@ -41,13 +41,12 @@ def _admin_id(body: dict | None = None, user_id: int = 0, init_data: str = "") -
 
 def _dump_user(tenant: Tenant) -> dict:
     ident = tenant.identity
-    until = tenant.paid_until.strftime("%Y-%m-%d") if tenant.paid_until else ""
     return {
         "tenant_id": tenant.id,
         "tg_id": tenant.owner_tg_id,
         "status": tenant.status,
         "plan": tenant.plan,
-        "paid_until": until,
+        "paid_until": fmt_until(tenant.paid_until) if tenant.paid_until else "",
         "username": ident.username if ident else "",
         "display_name": ident.display_name if ident else "",
         "official_user_id": ident.official_user_id if ident else None,
@@ -132,6 +131,8 @@ def mount_admin(app) -> None:
         if not _admin_id(user_id=user_id, init_data=init_data):
             return JSONResponse({"error": "仅管理员"}, status_code=403)
         raw = (q or "").strip()
+        if not raw:
+            return {"ok": True, "users": []}
         db = get_session()
         try:
             rows: list[Tenant] = []
@@ -154,8 +155,6 @@ def mount_admin(app) -> None:
                     t = db.get(Tenant, ident.tenant_id)
                     if t and t not in rows:
                         rows.append(t)
-            if not raw:
-                rows = list(db.scalars(select(Tenant).order_by(Tenant.id.desc()).limit(20)))
             return {"ok": True, "users": [_dump_user(t) for t in rows[:20]]}
         finally:
             db.close()
