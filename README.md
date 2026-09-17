@@ -1,89 +1,51 @@
-# 知蛛 / VerifyHub
+# VerifyHub
 
-Telegram 官方身份核验平台：客户绑定自己的 Bot Token，克隆出核验机器人。  
-支持 7 天试用、Stars 月费、网站 USDT 年付。可部署到 Railway。
+Telegram 身份核验平台：小程序为主，机器人为辅。
+充值后自动登记资料，群里 `@机器人 + 用户名` 出官方卡。
 
 仓库：https://github.com/Szchiji/zhizhu
 
-## 功能
+## 现在能做什么
 
-- 平台机器人：试用、绑定 Token、Stars 发票、USDT 收银台链接
-- 租户机器人：官方身份卡、弹窗确认、私聊按钮、转发消息比 User ID、内联发卡
-- 到期后租户机器人只提示续费
-- 管理员 `/confirm VH-XXXX` 手动确认 USDT 到账
-- 管理员 `/setprice` 改价，不用重新部署
+- 小程序：开通 / 查询 / 我的 / 管理
+- Stars 发票 + USDT TRC20 轮询自动开通，提前续费叠加时效
+- 开通后自动录入用户名 / ID / 姓名，可在「我的」里改
+- 内联卡 + 私聊查询，品牌跟 BotFather 名字
+- 后台可改价、收款地址、首页文案、续费提醒、强制订阅、补登记 / 拉黑
 
-## Railway 部署
+## Railway
 
-1. Railway 新建项目，从本仓库 GitHub 连接
-2. 添加 **Postgres** 插件，会自动注入 `DATABASE_URL`
-3. 给 Web 服务生成域名（Settings → Networking → Generate Domain）
-4. 配置变量：
+1. 连接本仓库，加 Postgres
+2. Generate Domain
+3. 环境变量：
 
 ```
-PLATFORM_BOT_TOKEN=平台机器人Token
+PLATFORM_BOT_TOKEN=
 WEBHOOK_BASE_URL=https://你的域名
 PUBLIC_BASE_URL=https://你的域名
-WEBHOOK_SECRET=随机长字符串
-ADMIN_TG_IDS=你的Telegram数字ID
-STARS_MONTHLY=500
-USDT_YEARLY=99
-USDT_CHAIN=trc20
-USDT_ADDRESS=你的TRC20地址
-USDT_CONFIRM_SECRET=随机字符串
-TRIAL_DAYS=7
+WEBHOOK_SECRET=随机串
+ADMIN_TG_IDS=你的电报数字ID
+USDT_ADDRESS=TRC20地址
+TRONGRID_API_KEY=trongrid.io 免费 key
+TOKEN_ENC_KEY=随机串
 ```
 
-`TOKEN_ENC_KEY` 建议再填一串随机字符，专门用来加密客户 Token。
+可选：`BRAND_NAME` `BRAND_TITLE` `不填则用机器人 getMe 名字`。
 
-5. 部署完成后打开 `https://你的域名/healthz` 应返回 `{"ok":true}`
-6. 在 Telegram 打开平台机器人发 `/start`
+4. `域名/healthz` 返回 `{"ok":true}`
+5. BotFather：`/setinline` 、`/setjoingroups` 、`/setmenubutton` 可选
+6. 发 `/start`，左下角「小程序」
 
-启动时会自动给平台机器人 `setWebhook` 到 `/wh/platform`。  
-客户绑定 Token 后，平台会把客户机器人 webhook 设到 `/wh/t/{tenant_id}`。
+## 闭环
 
-## 本地运行
+1. 用户小程序付 Stars / USDT
+2. 到账后订单变 active，资料自动写入
+3. `我的` 可改姓名和卡片正文
+4. 群里 `@机器人 用户名` 出卡
+5. 管理员在小程序「管理」改价、确认订单、补登记、改首页
 
-```bash
-python -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-cp .env.example .env
-# 编辑 .env，DATABASE_URL 可先用 sqlite:///./zhizhu.sqlite3
-uvicorn app.main:app --reload --port 8080
-```
+## 注意
 
-本地 webhook 需要公网地址（cloudflared / ngrok）填进 `WEBHOOK_BASE_URL`。
-
-## 客户怎么用
-
-1. `/start` → 开始试用
-2. `@BotFather /newbot`，把 Token 发给平台机器人
-3. `/setid` `/setname` 校准官方身份（默认用绑定者当前账号）
-4. 把 `@客户机器人` 发给朋友；或让朋友把可疑私聊转发给它
-5. 试用结束选 Stars 月费或 USDT 年付
-
-## USDT 确认
-
-链上监听到账后可：
-
-```bash
-curl -X POST https://你的域名/api/usdt/confirm \
-  -H 'content-type: application/json' \
-  -d '{"secret":"USDT_CONFIRM_SECRET","code":"VH-XXXXXX","txid":"链上哈希"}'
-```
-
-或管理员对平台机器人发送：`/confirm VH-XXXXXX txid`
-
-## 命令
-
-平台机器人：
-
-- `/start` `/status`
-- `/setid <数字ID>`
-- `/setname <显示名>`
-- `/confirm <订单号> [txid]`（管理员）
-- `/prices` 查看当前价格
-- `/setprice stars 500`（管理员，改 Stars 月费）
-- `/setprice usdt 99`（管理员，改 USDT 年付）
-- `/setaddr <TRC20地址>`（管理员）
+- 小程序改完后先关再开，避免旧缓存
+- 用户列表 / 订单列表要搜才出
+- 首页文案保存后重新 `/start`
