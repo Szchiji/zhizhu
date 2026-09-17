@@ -14,8 +14,8 @@ from sqlalchemy import select
 from telegram import Bot, MenuButtonWebApp, Update, WebAppInfo
 
 from app.access import set_bot
-from app.brand import refresh_from_bot
 from app.admin_api import mount_admin
+from app.brand import refresh_from_bot
 from app.config import (
     ADMIN_TG_IDS,
     PLATFORM_BOT_TOKEN,
@@ -28,23 +28,24 @@ from app.config import (
 )
 from app.crypto_token import decrypt_token
 from app.db import get_session, init_db
+from app.entry import deny_json
 from app.models import Identity, Order, Tenant, utcnow
 from app.plans import PLANS, plan_stars, plan_usdt
 from app.platform_bot import build_platform_app
 from app.services import (
     activate_order,
     add_event,
-    find_paid_identity,
-    resolve_paid_identity,
+    fulfill_stars_order,
     fmt_until,
     get_or_create_tenant,
     get_setting,
     new_code,
     open_order,
     parse_username,
+    resolve_paid_identity,
     save_paid_profile,
-    fulfill_stars_order,
     tenant_usable,
+    unique_usdt_amount,
 )
 from app.tenant_bot import handle_tenant_update
 from app.tg_webapp import user_from_init, user_id_from_init
@@ -105,7 +106,7 @@ async def lifespan(app: FastAPI):
             allowed_updates=["message", "callback_query", "inline_query", "pre_checkout_query", "purchased_paid_media"],
         )
         log.info("platform webhook %s", url)
-    mini = f"{(PUBLIC_BASE_URL or WEBHOOK_BASE_URL or '').rstrip('/')}/mini?v=3"
+    mini = f"{(PUBLIC_BASE_URL or WEBHOOK_BASE_URL or '').rstrip('/')}/mini?v=4"
     if mini.startswith("https://"):
         try:
             await platform_app.bot.set_chat_menu_button(
@@ -162,6 +163,9 @@ async def mini_me(user_id: int = 0, init_data: str = "", username: str = "", dis
     uid = _uid(user_id=user_id, init_data=init_data)
     if not uid:
         return JSONResponse({"error": "未登录"}, status_code=401)
+    blocked = await deny_json(uid)
+    if blocked:
+        return blocked
     db = get_session()
     try:
         tenant = get_or_create_tenant(db, uid)
@@ -197,7 +201,12 @@ async def mini_me(user_id: int = 0, init_data: str = "", username: str = "", dis
 
 
 @app.get("/api/mini/lookup")
-async def mini_lookup(q: str = ""):
+async def mini_lookup(q: str = "", user_id: int = 0, init_data: str = ""):
+    uid = _uid(user_id=user_id, init_data=init_data)
+    if uid:
+        blocked = await deny_json(uid)
+        if blocked:
+            return blocked
     raw = (q or "").strip()
     name = parse_username(raw)
     token = name or raw.lstrip("@")
@@ -272,6 +281,9 @@ async def mini_profile(request: Request):
     uid = _uid(body)
     if not uid:
         return JSONResponse({"error": "未登录"}, status_code=401)
+    blocked = await deny_json(uid)
+    if blocked:
+        return blocked
     db = get_session()
     try:
         tenant = get_or_create_tenant(db, uid)
@@ -302,6 +314,9 @@ async def mini_order(request: Request):
         key = "year"
     if not uid:
         raise HTTPException(400, detail="bad user")
+    blocked = await deny_json(uid)
+    if blocked:
+        return blocked
     if not PLATFORM_BOT_TOKEN:
         raise HTTPException(503, detail="bot not ready")
     db = get_session()
@@ -323,7 +338,7 @@ async def mini_order(request: Request):
             if not addr:
                 return JSONResponse({"error": "尚未配置 USDT 地址"}, status_code=400)
             code = new_code()
-            amount = plan_usdt(db, key)
+            amount = unique_usdt_amount(db, plan_usdt(db, key))
             db.add(
                 Order(
                     public_code=code,
@@ -379,7 +394,7 @@ async def mini_order(request: Request):
             data = r.json()
         if not data.get("ok"):
             return JSONResponse({"error": data.get("description", "无法创建 Stars 账单")}, status_code=400)
-        return {"ok": True, "invoice": data["result"]}
+        return {"ok": True, "invoice": data["result"], "payload": payload}
     finally:
         db.close()
 
