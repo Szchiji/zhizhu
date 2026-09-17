@@ -123,7 +123,7 @@ async function pay(btn,rail){
 if(!user){show(err,'请从机器人打开');return;} btn.disabled=true;
 try{
 const j=await api('/api/mini/order',{plan:'year',rail:rail});
-if(j.invoice&&tg.openInvoice){tg.openInvoice(j.invoice,st=>{if(st==='paid'){show(ok,'支付成功');loadMe();tab('me');}btn.disabled=false;});}
+if(j.invoice&&tg.openInvoice){tg.openInvoice(j.invoice,async st=>{if(st==='paid'){show(ok,'支付成功');try{await api('/api/mini/stars-paid',{payload:j.payload||'',username:user&&user.username,display_name:user&&((user.first_name||'')+(user.last_name?(' '+user.last_name):''))});}catch(e){}loadMe();tab('me');}btn.disabled=false;});}
 else if(j.address){
 document.getElementById('checkout').classList.remove('hidden');
 document.getElementById('oid').textContent=j.code; document.getElementById('oamt').textContent=j.amount+' USDT';
@@ -150,7 +150,7 @@ async function cancelPay(){ try{ await api('/api/mini/cancel',{code:document.get
 async function lookup(){
 const q=document.getElementById('q').value.trim();
 try{
-const j=await fetch('/api/mini/lookup?q='+encodeURIComponent(q)).then(r=>r.json());
+const j=await fetch('/api/mini/lookup?q='+encodeURIComponent(q)+'&user_id='+(user&&user.id||'')+'&init_data='+encodeURIComponent(initData)).then(r=>r.json());
 const box=document.getElementById('qcard'); if(j.error){show(err,j.error);return;} box.classList.remove('hidden');
 let html='';
 if(j.matches&&j.matches.length) html+='<div class="olist">'+j.matches.map(u=>'<div onclick="document.getElementById(\'q\').value=\'@'+u.username+'\';lookup()">@'+u.username+' · '+(u.display_name||'')+'</div>').join('')+'</div>';
@@ -162,6 +162,7 @@ async function loadMe(){
 if(!user)return;
 try{
 const j=await fetch('/api/mini/me?user_id='+user.id+'&init_data='+encodeURIComponent(initData)+'&username='+encodeURIComponent(user.username||'')+'&display_name='+encodeURIComponent((user.first_name||'')+(user.last_name?(' '+user.last_name):''))).then(r=>r.json());
+if(j.error){show(err,j.error);return;}
 document.getElementById('status').textContent=j.paid?'已开通':'未开通';
 document.getElementById('plan').textContent=j.plan_label||'—'; document.getElementById('until').textContent=j.paid_until||'—';
 document.getElementById('display').value=j.display_name||''; document.getElementById('card').value=j.card_text||'';
