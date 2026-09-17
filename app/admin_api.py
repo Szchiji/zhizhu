@@ -7,6 +7,7 @@ from fastapi.responses import JSONResponse
 from sqlalchemy import or_, select
 
 from app.access import normalize_channel
+from app.bot_avatar import router as avatar_router
 from app.config import ADMIN_TG_IDS, USDT_ADDRESS
 from app.db import get_session
 from app.home import load_home, save_home
@@ -62,6 +63,8 @@ def _days(body) -> int:
 
 
 def mount_admin(app) -> None:
+    app.include_router(avatar_router)
+
     @app.post("/api/mini/cancel")
     async def mini_cancel(request: Request):
         body = await request.json()
