@@ -9,6 +9,7 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.brand import bot_username
 from app.config import ADMIN_TG_IDS, PLAN_DEFAULT, STARS_MONTHLY, USDT_YEARLY
 from app.models import Identity, Order, OrderEvent, Setting, Tenant, utcnow
 
@@ -60,10 +61,14 @@ def parse_username(text: str) -> str:
     raw = (text or "").strip()
     if not raw:
         return ""
-    found = re.search(r"@([A-Za-z][A-Za-z0-9_]{3,31})", raw)
-    if found:
-        name = found.group(1)
-        return "" if name.lower() in SKIP_NAMES else name
+    bot = (bot_username() or "").lstrip("@").lower()
+    skip = {n.lower() for n in SKIP_NAMES}
+    if bot:
+        skip.add(bot)
+        raw = re.sub(rf"^@?{re.escape(bot)}\b(?:\s*\+\s*|\s+)", "", raw, flags=re.I).strip()
+    for name in re.findall(r"@([A-Za-z][A-Za-z0-9_]{3,31})", text or ""):
+        if name.lower() not in skip:
+            return name
     if re.search(r"https?://|t\.me/", raw, re.I):
         return ""
     for prefix in ("核验", "查询", "verify"):
@@ -71,7 +76,7 @@ def parse_username(text: str) -> str:
             raw = raw[len(prefix):].strip()
     token = re.split(r"[\s/?=&]+", raw)[0] if raw else ""
     token = token.lstrip("@")
-    if not USER_RE.fullmatch(token) or token.lower() in SKIP_NAMES:
+    if not USER_RE.fullmatch(token) or token.lower() in skip:
         return ""
     return token
 
@@ -99,7 +104,10 @@ def find_paid_by_tg_id(db: Session, tg_id: int) -> Identity | None:
 
 def find_paid_identity(db: Session, username: str) -> Identity | None:
     raw = (username or "").strip().lstrip("@")
-    name = parse_username(username) or (raw if USER_RE.fullmatch(raw) else "")
+    name = parse_username(username) or (raw if USER_RE.fullmatch(raw) and raw.lower() not in SKIP_NAMES else "")
+    bot = (bot_username() or "").lstrip("@").lower()
+    if name and bot and name.lower() == bot:
+        return None
     if not name:
         return None
     ident = db.scalar(select(Identity).where(Identity.username.ilike(name)))
@@ -114,6 +122,9 @@ def find_paid_identity(db: Session, username: str) -> Identity | None:
 async def resolve_paid_identity(db: Session, username: str, bot=None):
     ident = find_paid_identity(db, username)
     name = parse_username(username)
+    bot_name = (bot_username() or "").lstrip("@").lower()
+    if name and bot_name and name.lower() == bot_name:
+        return None
     if ident or not bot or not name:
         return ident
     try:
