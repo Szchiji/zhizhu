@@ -160,18 +160,19 @@ async def mini_me(user_id: int = 0, init_data: str = "", username: str = "", dis
     db = get_session()
     try:
         tenant = get_or_create_tenant(db, uid)
-        paid = tenant_usable(tenant)
         info = user_from_init(init_data)
+        user_obj = SimpleNamespace(
+            id=uid,
+            username=username or info.get("username") or None,
+            full_name=display_name or info.get("full_name") or "",
+        )
+        if not tenant_usable(tenant):
+            activated = fulfill_stars_order(db, user_id=uid, user=user_obj)
+            if activated:
+                tenant = activated
+        paid = tenant_usable(tenant)
         if paid:
-            save_paid_profile(
-                db,
-                tenant,
-                SimpleNamespace(
-                    id=uid,
-                    username=username or info.get("username") or None,
-                    full_name=display_name or info.get("full_name") or "",
-                ),
-            )
+            save_paid_profile(db, tenant, user_obj)
         ident = db.scalar(select(Identity).where(Identity.tenant_id == tenant.id)) or tenant.identity
         until = fmt_until(tenant.paid_until) if tenant.paid_until else ("管理员" if paid else "")
         return {
