@@ -24,7 +24,7 @@ h1{font-size:22px;margin:0 0 6px;font-weight:680}
 button{flex:1;border:0;border-radius:14px;padding:13px 10px;font-size:14px;font-weight:700;color:#1a1406;background:linear-gradient(180deg,var(--gold2),var(--gold))}
 button.ghost{background:#171c26;color:var(--text);border:1px solid var(--line)}
 button.usdt{background:#143528;color:#d9ffe8}
-input,textarea{width:100%;border:1px solid var(--line);background:#0b0e14;color:var(--text);border-radius:14px;padding:13px 12px;font-size:15px;margin-top:8px}
+input,textarea,select{width:100%;border:1px solid var(--line);background:#0b0e14;color:var(--text);border-radius:14px;padding:13px 12px;font-size:15px;margin-top:8px}
 textarea{min-height:88px}label{display:block;margin-top:12px;color:var(--muted);font-size:12px}
 .err,.ok{display:none;border-radius:14px;padding:11px 12px;font-size:13px;margin-bottom:12px}
 .err{background:#2a1518;color:#ffc4c8}.ok{background:#10261c;color:#c6f6d8}
@@ -59,6 +59,16 @@ textarea{min-height:88px}label{display:block;margin-top:12px;color:var(--muted);
 <div class="card"><div class="kicker">Ledger</div><h1>订单记录</h1><div class="olist" id="olist">暂无</div></div>
 </section>
 <section id="tab-adm" class="hidden">
+<div class="card"><div class="kicker">Home</div><h1>首页设置</h1>
+<label>标题（可空，空则用机器人名）</label><input id="htitle" maxlength="40" />
+<label>未开通介绍</label><textarea id="hbody0" maxlength="500"></textarea>
+<label>已开通介绍</label><textarea id="hbody1" maxlength="500"></textarea>
+<label>使用说明</label><textarea id="hhelp" maxlength="800"></textarea>
+<label>按钮1</label><input id="hb1" /><select id="ha1"><option value="mini">打开小程序</option><option value="lookup">机器人查询</option><option value="help">发送说明</option></select>
+<label>按钮2</label><input id="hb2" /><select id="ha2"><option value="mini">打开小程序</option><option value="lookup">机器人查询</option><option value="help">发送说明</option></select>
+<label>按钮3</label><input id="hb3" /><select id="ha3"><option value="mini">打开小程序</option><option value="lookup">机器人查询</option><option value="help">发送说明</option></select>
+<p class="sub">占位符：{品牌} {机器人} {到期} {账号} {姓名}</p>
+<div class="btns"><button onclick="saveHome()">保存首页</button></div></div>
 <div class="card"><div class="kicker">Admin</div><h1>经营设置</h1><p class="sub" id="aboard"></p>
 <label>Stars 年付</label><input id="astars" type="number" /><label>USDT 年付</label><input id="ausdt" type="number" />
 <div class="btns"><button onclick="setPrice('stars')">改 Stars</button><button class="usdt" onclick="setPrice('usdt')">改 USDT</button></div>
@@ -189,6 +199,12 @@ document.getElementById('aclone').textContent=j.clone?'克隆：开':'克隆：�
 document.getElementById('rdays').value=j.remind_days||7; document.getElementById('rtext').value=j.remind_text||'';
 window._remind=j.remind_enabled!=='0'; document.getElementById('renable').textContent=window._remind?'提醒：开':'提醒：关';
 document.getElementById('achannel').value=j.force_channel||''; window._ch=j.force_channel_on==='1'; document.getElementById('achon').textContent=window._ch?'强制订阅：开':'强制订阅：关';
+const hm=j.home||{}; document.getElementById('htitle').value=hm.title||'';
+document.getElementById('hbody0').value=hm.body_unpaid||''; document.getElementById('hbody1').value=hm.body_paid||'';
+document.getElementById('hhelp').value=hm.help||'';
+const bt=hm.btns||[];
+['hb1','hb2','hb3'].forEach((id,i)=>{document.getElementById(id).value=(bt[i]&&bt[i].label)||'';});
+['ha1','ha2','ha3'].forEach((id,i)=>{document.getElementById(id).value=(bt[i]&&bt[i].action)||'mini';});
 }catch(e){show(err,e.message);}
 }
 async function setPrice(rail){try{await api('/api/mini/admin',{action:'price',rail:rail,amount:document.getElementById(rail==='stars'?'astars':'ausdt').value});show(ok,'价格已更新');loadAdmin();}catch(e){show(err,e.message);}}
@@ -211,6 +227,10 @@ document.getElementById('aorders').innerHTML=rows.length?rows.map(o=>'<div oncli
 }catch(e){show(err,e.message);}
 }
 async function confirmOrder(){try{await api('/api/mini/admin',{action:'confirm',code:document.getElementById('acode').value,txid:document.getElementById('atxid').value});show(ok,'订单已确认');}catch(e){show(err,e.message);}}
+async function saveHome(){
+const btns=[1,2,3].map(i=>({label:document.getElementById('hb'+i).value,action:document.getElementById('ha'+i).value})).filter(x=>x.label);
+try{await api('/api/mini/admin',{action:'home',title:document.getElementById('htitle').value,body_unpaid:document.getElementById('hbody0').value,body_paid:document.getElementById('hbody1').value,help:document.getElementById('hhelp').value,btns:btns});show(ok,'首页已保存，重新 /start 查看');}catch(e){show(err,e.message);}
+}
 async function save(){try{await api('/api/mini/profile',{display_name:document.getElementById('display').value,card_text:document.getElementById('card').value,username:user&&user.username});show(ok,'资料已生效');}catch(e){show(err,e.message);}}
 loadMe();
 </script></body></html>
