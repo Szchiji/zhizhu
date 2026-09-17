@@ -15,13 +15,26 @@ from app.verify import card_kb, card_text, promo_text
 log = logging.getLogger("zhizhu.inline")
 
 
-def _thumb() -> str:
+def _thumb_base() -> str:
     base = (PUBLIC_BASE_URL or WEBHOOK_BASE_URL or "").rstrip("/")
     return f"{base}/avatar" if base.startswith("https://") else ""
 
 
-def _article(**kwargs) -> InlineQueryResultArticle:
-    thumb = _thumb()
+async def _thumb(bot) -> str:
+    base = _thumb_base()
+    if not base:
+        return ""
+    tag = "0"
+    try:
+        photos = await bot.get_user_profile_photos(bot.id, limit=1)
+        if photos.photos:
+            tag = photos.photos[0][-1].file_unique_id or "0"
+    except Exception:
+        log.exception("avatar version")
+    return f"{base}?f={tag}"
+
+
+def _article(thumb: str, **kwargs) -> InlineQueryResultArticle:
     if thumb:
         kwargs["thumbnail_url"] = thumb
         kwargs["thumbnail_width"] = 320
@@ -34,11 +47,12 @@ async def on_inline(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not q:
         return
     uid = q.from_user.id if q.from_user else 0
+    thumb = await _thumb(context.bot)
     reason, _url = await gate_user(uid)
     if reason:
         try:
             await q.answer(
-                [_article(id="denied", title="暂不可用", description=reason, input_message_content=InputTextMessageContent(reason))],
+                [_article(thumb, id="denied", title="暂不可用", description=reason, input_message_content=InputTextMessageContent(reason))],
                 cache_time=0,
                 is_personal=True,
             )
@@ -67,6 +81,7 @@ async def on_inline(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         db.close()
     markup = card_kb(username=uname, bot_username=bot_name)
     item = _article(
+        thumb,
         id=(q.id or "r1")[:64],
         title=title,
         description=desc,
@@ -79,7 +94,7 @@ async def on_inline(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         log.exception("inline answer")
         try:
             await q.answer(
-                [_article(id="fallback", title=title, description=desc, input_message_content=InputTextMessageContent(body), reply_markup=markup)],
+                [_article(thumb, id="fallback", title=title, description=desc, input_message_content=InputTextMessageContent(body), reply_markup=markup)],
                 cache_time=0,
                 is_personal=True,
             )
