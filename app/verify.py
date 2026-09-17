@@ -18,9 +18,7 @@ def card_text(ident: Identity, *, watermark: bool = False, bot_username: str = "
     extra = (ident.card_text or "").strip()
     brand = brand_name()
     lines = [
-        f"✅  {brand}官方核验",
-        "━━━━━━━━━━━━",
-        f"来源：@{bot}",
+        f"🄰{brand}官方核验来源：@{bot}",
         "━━━━━━━━━━━━",
         f"姓名：{name}",
         f"账号：{uname}",
@@ -28,7 +26,7 @@ def card_text(ident: Identity, *, watermark: bool = False, bot_username: str = "
         "━━━━━━━━━━━━",
     ]
     if extra:
-        lines += [extra, ""]
+        lines += [extra, "━━━━━━━━━━━━"]
     lines += [
         "谨防仿冒：请以本机器人实时查询结果为准",
         f"如需查询，请在输入框内输入：@{bot} + 用户名",
