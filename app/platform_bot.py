@@ -9,14 +9,15 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup, LabeledPrice, U
 from telegram.ext import Application, CallbackQueryHandler, CommandHandler, ContextTypes, InlineQueryHandler, MessageHandler, PreCheckoutQueryHandler, filters
 
 from app.brand import brand_name, brand_title, bot_username as brand_bot
-from app.home import render_help, render_start
-from app.config import ADMIN_TG_IDS, PUBLIC_BASE_URL, USDT_ADDRESS, USDT_CHAIN, WEBHOOK_BASE_URL, WEBHOOK_SECRET
+from app.config import ADMIN_TG_IDS, PUBLIC_BASE_URL, USDT_ADDRESS, USDT_CHAIN, WEBHOOK_BASE_URL
 from app.crypto_token import encrypt_token
 from app.db import get_session
+from app.entry import deny_message
+from app.home import render_help, render_start
 from app.inline_query import on_inline
 from app.models import Identity, Order, Tenant, utcnow
 from app.plans import PLANS, clone_on, plan_stars, plan_usdt, price_board, set_clone
-from app.services import activate_order, add_event, find_paid_by_tg_id, fmt_until, get_or_create_tenant, get_setting, new_code, open_order, parse_username, resolve_paid_identity, save_paid_profile, set_setting, tenant_usable
+from app.services import activate_order, add_event, find_paid_by_tg_id, fmt_until, get_or_create_tenant, get_setting, new_code, open_order, parse_username, resolve_paid_identity, save_paid_profile, set_setting, tenant_usable, unique_usdt_amount
 from app.verify import card_kb, card_text, promo_text, share_url
 
 TOKEN_RE = __import__('re').compile(r'^\d{6,}:[A-Za-z0-9_-]{20,}$')
@@ -49,16 +50,6 @@ def _kb_admin(db) -> InlineKeyboardMarkup:
         [InlineKeyboardButton(clone, callback_data='adm:clone')],
         [InlineKeyboardButton('返回首页', callback_data='status')],
     ])
-
-
-def _kb_home(db, tenant: Tenant) -> InlineKeyboardMarkup:
-    mini = _mini()
-    rows = [[InlineKeyboardButton('查询登记', callback_data='ask_lookup')]]
-    if mini.startswith('https://'):
-        rows.append([InlineKeyboardButton('小程序', web_app=WebAppInfo(url=mini))])
-    if _is_admin(tenant.owner_tg_id):
-        rows.append([InlineKeyboardButton('管理员', callback_data='admin')])
-    return InlineKeyboardMarkup(rows)
 
 
 async def _send_lookup(message, db, name: str, bot_name: str, bot=None, user=None) -> None:
@@ -95,6 +86,8 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     db = get_session()
     try:
         user = update.effective_user
+        if await deny_message(update.effective_message, user.id):
+            return
         tenant = get_or_create_tenant(db, user.id)
         payload = (context.args[0] if context.args else '').strip()
         if payload.startswith('q') and parse_username(payload[1:]):
@@ -116,6 +109,8 @@ async def cmd_status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
 
 
 async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if await deny_message(update.effective_message, update.effective_user.id):
+        return
     db = get_session()
     try:
         await update.effective_message.reply_text(render_help(db, bot=_bot(context)))
@@ -242,6 +237,8 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     data = query.data or ''
     db = get_session()
     try:
+        if data not in {'admin'} and not data.startswith('adm:') and await deny_message(query.message, query.from_user.id):
+            return
         tenant = get_or_create_tenant(db, query.from_user.id)
         if await _admin_cb(query, context, data, db):
             return
@@ -288,7 +285,7 @@ async def _pay_usdt(message, tenant: Tenant, db, key: str) -> None:
         await message.reply_text('已有待支付订单。')
         return
     code = new_code()
-    amount = plan_usdt(db, key)
+    amount = unique_usdt_amount(db, plan_usdt(db, key))
     db.add(Order(public_code=code, tenant_id=tenant.id, rail='usdt', plan=key, period_days=PLANS[key]['days'], amount=amount, currency='USDT', chain=USDT_CHAIN, pay_address=addr, status='pending', expires_at=utcnow() + timedelta(minutes=20)))
     db.commit()
     await message.reply_text(f"{PLANS[key]['label']}  {amount:g} USDT\n订单 {code}\n20 分钟内有效")
@@ -397,6 +394,8 @@ async def _handle_admin_text(update, context, text: str) -> bool:
 async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if update.message and update.message.web_app_data:
         await on_webapp(update, context)
+        return
+    if await deny_message(update.effective_message, update.effective_user.id):
         return
     text = (update.message.text or '').strip()
     if await _handle_admin_text(update, context, text):
