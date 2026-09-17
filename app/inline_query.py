@@ -5,6 +5,7 @@ import logging
 from telegram import InlineQueryResultArticle, InputTextMessageContent, Update
 from telegram.ext import ContextTypes
 
+from app.access import gate_user
 from app.brand import brand_name, bot_username
 from app.db import get_session
 from app.services import parse_username, resolve_paid_identity
@@ -16,6 +17,25 @@ log = logging.getLogger("zhizhu.inline")
 async def on_inline(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     q = update.inline_query
     if not q:
+        return
+    uid = q.from_user.id if q.from_user else 0
+    reason, _url = await gate_user(uid)
+    if reason:
+        try:
+            await q.answer(
+                [
+                    InlineQueryResultArticle(
+                        id="denied",
+                        title="暂不可用",
+                        description=reason,
+                        input_message_content=InputTextMessageContent(reason),
+                    )
+                ],
+                cache_time=0,
+                is_personal=True,
+            )
+        except Exception:
+            log.exception("inline deny")
         return
     bot_name = (context.bot.username or bot_username() or "bot").lstrip("@")
     brand = brand_name() or "官方核验"
