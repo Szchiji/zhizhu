@@ -14,6 +14,7 @@ from sqlalchemy import select
 from telegram import Bot, MenuButtonWebApp, Update, WebAppInfo
 
 from app.access import set_bot
+from app.brand import refresh_from_bot
 from app.admin_api import mount_admin
 from app.config import (
     ADMIN_TG_IDS,
@@ -94,6 +95,7 @@ async def lifespan(app: FastAPI):
     set_bot(platform_app.bot)
     await platform_app.initialize()
     await platform_app.start()
+    await refresh_from_bot(platform_app.bot)
     if WEBHOOK_BASE_URL:
         url = f"{WEBHOOK_BASE_URL}/wh/platform"
         await platform_app.bot.set_webhook(
