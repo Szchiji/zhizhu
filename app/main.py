@@ -103,7 +103,7 @@ async def lifespan(app: FastAPI):
             allowed_updates=["message", "callback_query", "inline_query", "pre_checkout_query", "purchased_paid_media"],
         )
         log.info("platform webhook %s", url)
-    mini = f"{(PUBLIC_BASE_URL or WEBHOOK_BASE_URL or '').rstrip('/')}/mini"
+    mini = f"{(PUBLIC_BASE_URL or WEBHOOK_BASE_URL or '').rstrip('/')}/mini?v=3"
     if mini.startswith("https://"):
         try:
             await platform_app.bot.set_chat_menu_button(
@@ -143,11 +143,14 @@ async def root():
 async def mini(request: Request):
     db = get_session()
     try:
-        return templates.TemplateResponse(
+        resp = templates.TemplateResponse(
             request,
             "mini.html",
             {"stars": plan_stars(db, "year"), "usdt": f"{plan_usdt(db, 'year'):g}"},
         )
+        resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+        resp.headers["Pragma"] = "no-cache"
+        return resp
     finally:
         db.close()
 
