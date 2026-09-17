@@ -71,6 +71,8 @@ def card_text(ident: Identity, *, watermark: bool = False, bot_username: str = "
 
 
 def promo_text(bot_name: str = "", name: str = "") -> str:
+    if name and is_platform_bot(name, bot_name):
+        return issuer_text(bot_name)
     bot = _bot(bot_name)
     brand = brand_name()
     lines = [
@@ -91,6 +93,8 @@ def card_kb(ident: Identity | None = None, *, share_url: str = "", bot_username:
     bot = _bot(bot_username)
     uname = username or (ident.username if ident else "") or ""
     uname = uname.lstrip("@")
+    if uname and is_platform_bot(uname, bot):
+        return issuer_kb(bot)
     rows: list[list[InlineKeyboardButton]] = []
     if uname:
         rows.append([InlineKeyboardButton("联系他", url=f"https://t.me/{uname}")])
