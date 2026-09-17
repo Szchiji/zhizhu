@@ -5,6 +5,8 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from app.brand import brand_name, bot_username
 from app.models import Identity
 
+BADGE = "🄰️"
+
 
 def _bot(name: str = "") -> str:
     return (name or bot_username()).lstrip("@")
@@ -18,7 +20,8 @@ def card_text(ident: Identity, *, watermark: bool = False, bot_username: str = "
     extra = (ident.card_text or "").strip()
     brand = brand_name()
     lines = [
-        f"🄰{brand}官方核验来源：@{bot}",
+        f"{BADGE} {brand}官方核验",
+        f"来源：@{bot}",
         "━━━━━━━━━━━━",
         f"姓名：{name}",
         f"账号：{uname}",
@@ -39,7 +42,8 @@ def promo_text(bot_name: str = "", name: str = "") -> str:
     bot = _bot(bot_name)
     brand = brand_name()
     lines = [
-        f"🄰{brand}官方核验来源：@{bot}",
+        f"{BADGE} {brand}官方核验",
+        f"来源：@{bot}",
         "━━━━━━━━━━━━",
     ]
     if name:
