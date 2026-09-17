@@ -23,7 +23,10 @@ async def serve_avatar():
         return Response(
             content=bytes(data),
             media_type="image/jpeg",
-            headers={"Cache-Control": "public, max-age=300"},
+            headers={
+                "Cache-Control": "no-store, no-cache, max-age=0",
+                "Pragma": "no-cache",
+            },
         )
     except HTTPException:
         raise
