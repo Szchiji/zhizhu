@@ -4,10 +4,10 @@ import os
 
 from app.config import BOT_USERNAME, BRAND_NAME, BRAND_TITLE, MENU_TEXT
 
-_LEGACY = {"", "蜘蛛", "蜘蛛核验", "zhizhusp_bot"}
+_LEGACY = {"", "蜘蛛", "蜘蛛核验", "zhizhusp_bot", "官方核验"}
 
 _state = {
-    "name": BRAND_NAME if BRAND_NAME not in _LEGACY else "",
+    "name": "",
     "title": BRAND_TITLE,
     "username": BOT_USERNAME if BOT_USERNAME not in _LEGACY else "",
     "menu": MENU_TEXT,
@@ -16,7 +16,12 @@ _state = {
 
 
 def brand_name() -> str:
-    return _state["name"] or BRAND_NAME if BRAND_NAME not in _LEGACY else (_state["name"] or "官方核验")
+    if _state["name"]:
+        return _state["name"]
+    env = (os.getenv("BRAND_NAME") or BRAND_NAME or "").strip()
+    if env and env not in _LEGACY:
+        return env
+    return "官方核验"
 
 
 def brand_title() -> str:
@@ -28,7 +33,7 @@ def bot_username() -> str:
 
 
 def menu_text() -> str:
-    return _state["menu"] or "工作台"
+    return _state["menu"] or "小程序"
 
 
 async def refresh_from_bot(bot) -> None:
@@ -38,9 +43,9 @@ async def refresh_from_bot(bot) -> None:
         return
     if me.username:
         _state["username"] = me.username.lstrip("@")
-    env_name = os.getenv("BRAND_NAME") or ""
+    env_name = (os.getenv("BRAND_NAME") or "").strip()
     if env_name and env_name not in _LEGACY:
         _state["name"] = env_name
     elif me.first_name:
-        _state["name"] = me.first_name
+        _state["name"] = me.first_name.strip()
     _state["ready"] = True
