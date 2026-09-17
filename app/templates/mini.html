@@ -66,16 +66,19 @@ textarea{min-height:88px}label{display:block;margin-top:12px;color:var(--muted);
 <div class="card"><h1>续费提醒</h1><label>提前天数</label><input id="rdays" type="number" value="7" /><label>提醒文案</label><textarea id="rtext"></textarea><div class="btns"><button class="ghost" onclick="saveRemind()">保存</button><button class="ghost" id="renable" onclick="toggleRemind()">提醒：开</button></div></div>
 <div class="card"><h1>强制订阅</h1><label>频道</label><input id="achannel" placeholder="@channel 或 -100ID" /><div class="btns"><button class="ghost" onclick="saveChannel()">保存频道</button><button class="ghost" id="achon" onclick="toggleChannel()">强制订阅：关</button></div></div>
 <div class="card"><h1>用户 / 补登记</h1>
-<input id="uq" placeholder="@用户名 或 电报ID，空搜看最近用户" />
-<div class="btns"><button onclick="searchUsers()">搜索</button></div>
-<div class="olist" id="ulist">点搜索看已开通用户</div>
+<input id="uq" placeholder="@用户名 或 电报ID" />
+<div class="btns"><button onclick="searchUsers()">搜索用户</button></div>
+<div class="olist" id="ulist">输入条件后点搜索</div>
 <label>电报ID</label><input id="atgid" placeholder="数字ID" />
 <label>用户名</label><input id="auname" placeholder="username" />
 <label>姓名</label><input id="aname" placeholder="对外姓名" />
 <label>开通天数</label><input id="adays" type="number" value="365" />
 <div class="btns"><button onclick="bindUser()">补登记</button><button class="ghost" onclick="addUser()">添加并开通</button></div></div>
-<div class="card"><h1>确认订单</h1><div class="olist" id="apend">暂无待确认</div>
-<p class="sub" style="margin-top:10px">最近订单</p><div class="olist" id="aorders">暂无</div>
+<div class="card"><h1>确认订单</h1>
+<input id="oq" placeholder="订单号或TG ID，点搜索才显示" />
+<div class="btns"><button onclick="searchOrders()">搜索订单</button></div>
+<div class="olist" id="apend"></div>
+<div class="olist" id="aorders">输入条件后点搜索</div>
 <label>订单号</label><input id="acode" placeholder="VH-XXXXXX" />
 <label>交易哈希（可空）</label><input id="atxid" />
 <div class="btns"><button onclick="confirmOrder()">确认开通</button></div></div>
@@ -95,7 +98,7 @@ function show(el,msg){err.style.display='none';ok.style.display='none';el.style.
 function tab(name){
 ['pay','q','me','adm'].forEach(n=>document.getElementById('tab-'+n).classList.toggle('hidden',n!==name));
 ['pay','q','me','adm'].forEach((n,i)=>document.getElementById('n'+(i+1)).classList.toggle('on',n===name));
-if(name==='me'){loadMe();loadOrders();} if(name==='adm'){loadAdmin();searchUsers();}
+if(name==='me'){loadMe();loadOrders();} if(name==='adm'){loadAdmin();}
 }
 if(user){
 document.getElementById('uname').textContent=user.first_name+(user.last_name?(' '+user.last_name):'');
@@ -179,8 +182,6 @@ document.getElementById('aclone').textContent=j.clone?'克隆：开':'克隆：�
 document.getElementById('rdays').value=j.remind_days||7; document.getElementById('rtext').value=j.remind_text||'';
 window._remind=j.remind_enabled!=='0'; document.getElementById('renable').textContent=window._remind?'提醒：开':'提醒：关';
 document.getElementById('achannel').value=j.force_channel||''; window._ch=j.force_channel_on==='1'; document.getElementById('achon').textContent=window._ch?'强制订阅：开':'强制订阅：关';
-document.getElementById('apend').innerHTML=(j.pending||[]).length?j.pending.map(o=>'<div onclick="document.getElementById(\'acode\').value=\''+o.code+'\'"><b>'+o.code+'</b> · '+o.amount+'U · '+o.status+'</div>').join(''):'暂无待确认';
-document.getElementById('aorders').innerHTML=(j.orders||[]).length?j.orders.map(o=>'<div onclick="document.getElementById(\'acode\').value=\''+o.code+'\'"><b>'+o.code+'</b> · '+(o.rail||'')+' · '+o.amount+' · '+o.status+(o.tg_id?(' · TG '+o.tg_id):'')+'</div>').join(''):'暂无';
 }catch(e){show(err,e.message);}
 }
 async function setPrice(rail){try{await api('/api/mini/admin',{action:'price',rail:rail,amount:document.getElementById(rail==='stars'?'astars':'ausdt').value});show(ok,'价格已更新');loadAdmin();}catch(e){show(err,e.message);}}
@@ -190,7 +191,19 @@ async function toggleRemind(){window._remind=!window._remind;document.getElement
 async function saveChannel(){try{await api('/api/mini/admin',{action:'channel',channel:document.getElementById('achannel').value,enabled:window._ch?'1':'0'});show(ok,'频道已保存');}catch(e){show(err,e.message);}}
 async function toggleChannel(){window._ch=!window._ch;document.getElementById('achon').textContent=window._ch?'强制订阅：开':'强制订阅：关';saveChannel();}
 async function toggleClone(){try{const j=await api('/api/mini/admin',{action:'clone'});document.getElementById('aclone').textContent=j.clone?'克隆：开':'克隆：关';}catch(e){show(err,e.message);}}
-async function confirmOrder(){try{await api('/api/mini/admin',{action:'confirm',code:document.getElementById('acode').value,txid:document.getElementById('atxid').value});show(ok,'订单已确认');loadAdmin();}catch(e){show(err,e.message);}}
+async function searchOrders(){
+const q=(document.getElementById('oq').value||'').trim().toLowerCase();
+try{
+const j=await fetch('/api/mini/admin?user_id='+(user&&user.id||'')+'&init_data='+encodeURIComponent(initData)).then(r=>r.json());
+if(j.error){show(err,j.error);return;}
+const hit=o=>!q||String(o.code||'').toLowerCase().includes(q)||String(o.tg_id||'').includes(q)||String(o.status||'').includes(q)||String(o.rail||'').includes(q);
+const pend=(j.pending||[]).filter(hit);
+const rows=(j.orders||[]).filter(hit);
+document.getElementById('apend').innerHTML=pend.length?pend.map(o=>'<div onclick="document.getElementById(\'acode\').value=\''+o.code+'\'"><b>'+o.code+'</b> · '+o.amount+'U · '+o.status+'</div>').join(''):'';
+document.getElementById('aorders').innerHTML=rows.length?rows.map(o=>'<div onclick="document.getElementById(\'acode\').value=\''+o.code+'\'"><b>'+o.code+'</b> · '+(o.rail||'')+' · '+o.amount+' · '+o.status+(o.tg_id?(' · TG '+o.tg_id):'')+'</div>').join(''):'未找到';
+}catch(e){show(err,e.message);}
+}
+async function confirmOrder(){try{await api('/api/mini/admin',{action:'confirm',code:document.getElementById('acode').value,txid:document.getElementById('atxid').value});show(ok,'订单已确认');}catch(e){show(err,e.message);}}
 async function save(){try{await api('/api/mini/profile',{display_name:document.getElementById('display').value,card_text:document.getElementById('card').value,username:user&&user.username});show(ok,'资料已生效');}catch(e){show(err,e.message);}}
 loadMe();
 </script></body></html>
