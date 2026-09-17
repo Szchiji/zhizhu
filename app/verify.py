@@ -1,19 +1,13 @@
 from __future__ import annotations
 
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
 from app.brand import brand_name, bot_username
-from app.config import PUBLIC_BASE_URL, WEBHOOK_BASE_URL
 from app.models import Identity
 
 
 def _bot(name: str = "") -> str:
     return (name or bot_username()).lstrip("@")
-
-
-def _mini() -> str:
-    base = (PUBLIC_BASE_URL or WEBHOOK_BASE_URL or "").rstrip("/")
-    return f"{base}/mini" if base.startswith("https://") else ""
 
 
 def card_text(ident: Identity, *, watermark: bool = False, bot_username: str = "") -> str:
@@ -68,11 +62,7 @@ def card_kb(ident: Identity | None = None, *, share_url: str = "", bot_username:
     if uname:
         rows.append([InlineKeyboardButton("联系他", url=f"https://t.me/{uname}")])
     rows.append([InlineKeyboardButton("再查一个", switch_inline_query_current_chat="")])
-    mini = _mini()
-    if mini:
-        rows.append([InlineKeyboardButton("开通官方核验", web_app=WebAppInfo(url=mini))])
-    else:
-        rows.append([InlineKeyboardButton("开通官方核验", url=f"https://t.me/{bot}?startapp")])
+    rows.append([InlineKeyboardButton("开通官方核验", url=f"https://t.me/{bot}?startapp")])
     return InlineKeyboardMarkup(rows)
 
 
