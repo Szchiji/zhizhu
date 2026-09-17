@@ -12,6 +12,39 @@ def _bot(name: str = "") -> str:
     return (name or bot_username()).lstrip("@")
 
 
+def is_platform_bot(query: str, bot_name: str = "") -> bool:
+    q = (query or "").strip().lstrip("@").split()[0]
+    bot = _bot(bot_name)
+    return bool(q and bot and q.lower() == bot.lower())
+
+
+def issuer_text(bot_username: str = "") -> str:
+    bot = _bot(bot_username)
+    brand = brand_name()
+    return "\n".join(
+        [
+            f"{BADGE} {brand} 官方出具方",
+            f"来源：@{bot}",
+            "━━━━━━━━━━━━",
+            "本账号为平台核验机器人",
+            "负责出具官方登记卡，不是个人身份登记",
+            "━━━━━━━━━━━━",
+            f"查个人请输入：@{bot} + 对方用户名",
+            "自己要官方卡：点下方「开通官方核验」",
+        ]
+    )
+
+
+def issuer_kb(bot_username: str = "") -> InlineKeyboardMarkup:
+    bot = _bot(bot_username)
+    return InlineKeyboardMarkup(
+        [
+            [InlineKeyboardButton("再查一个", switch_inline_query_current_chat="")],
+            [InlineKeyboardButton("开通官方核验", url=f"https://t.me/{bot}?startapp")],
+        ]
+    )
+
+
 def card_text(ident: Identity, *, watermark: bool = False, bot_username: str = "") -> str:
     bot = _bot(bot_username)
     name = (ident.display_name or "未填姓名").strip()
