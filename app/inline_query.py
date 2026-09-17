@@ -7,11 +7,26 @@ from telegram.ext import ContextTypes
 
 from app.access import gate_user
 from app.brand import brand_name, bot_username
+from app.config import PUBLIC_BASE_URL, WEBHOOK_BASE_URL
 from app.db import get_session
 from app.services import parse_username, resolve_paid_identity
 from app.verify import card_kb, card_text, promo_text
 
 log = logging.getLogger("zhizhu.inline")
+
+
+def _thumb() -> str:
+    base = (PUBLIC_BASE_URL or WEBHOOK_BASE_URL or "").rstrip("/")
+    return f"{base}/avatar" if base.startswith("https://") else ""
+
+
+def _article(**kwargs) -> InlineQueryResultArticle:
+    thumb = _thumb()
+    if thumb:
+        kwargs["thumbnail_url"] = thumb
+        kwargs["thumbnail_width"] = 320
+        kwargs["thumbnail_height"] = 320
+    return InlineQueryResultArticle(**kwargs)
 
 
 async def on_inline(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -23,14 +38,7 @@ async def on_inline(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if reason:
         try:
             await q.answer(
-                [
-                    InlineQueryResultArticle(
-                        id="denied",
-                        title="暂不可用",
-                        description=reason,
-                        input_message_content=InputTextMessageContent(reason),
-                    )
-                ],
+                [_article(id="denied", title="暂不可用", description=reason, input_message_content=InputTextMessageContent(reason))],
                 cache_time=0,
                 is_personal=True,
             )
@@ -58,35 +66,20 @@ async def on_inline(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     finally:
         db.close()
     markup = card_kb(username=uname, bot_username=bot_name)
+    item = _article(
+        id=(q.id or "r1")[:64],
+        title=title,
+        description=desc,
+        input_message_content=InputTextMessageContent(body),
+        reply_markup=markup,
+    )
     try:
-        await q.answer(
-            [
-                InlineQueryResultArticle(
-                    id=(q.id or "r1")[:64],
-                    title=title,
-                    description=desc,
-                    input_message_content=InputTextMessageContent(body),
-                    reply_markup=markup,
-                )
-            ],
-            cache_time=0,
-            is_personal=True,
-            switch_pm_text="打开小程序",
-            switch_pm_parameter="pay",
-        )
+        await q.answer([item], cache_time=0, is_personal=True, switch_pm_text="打开小程序", switch_pm_parameter="pay")
     except Exception:
         log.exception("inline answer")
         try:
             await q.answer(
-                [
-                    InlineQueryResultArticle(
-                        id="fallback",
-                        title=title,
-                        description=desc,
-                        input_message_content=InputTextMessageContent(body),
-                        reply_markup=markup,
-                    )
-                ],
+                [_article(id="fallback", title=title, description=desc, input_message_content=InputTextMessageContent(body), reply_markup=markup)],
                 cache_time=0,
                 is_personal=True,
             )
