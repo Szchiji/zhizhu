@@ -13,14 +13,7 @@ from app.config import ADMIN_TG_IDS, PLAN_DEFAULT, STARS_MONTHLY, USDT_YEARLY
 from app.models import Identity, Order, OrderEvent, Setting, Tenant, utcnow
 
 USER_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_]{3,31}$")
-SKIP_NAMES = {
-    "https",
-    "http",
-    "www",
-    "telegram",
-    "start",
-    "join",
-}
+SKIP_NAMES = {"https", "http", "www", "telegram", "start", "join"}
 CST = ZoneInfo("Asia/Shanghai")
 
 
@@ -157,7 +150,7 @@ def save_paid_profile(db: Session, tenant: Tenant, user=None) -> Identity:
     name = ""
     if user is not None:
         name = getattr(user, "full_name", None) or getattr(user, "first_name", None) or ""
-    if name and not (ident.display_name or "").strip():
+    if name:
         ident.display_name = str(name).strip()[:64]
     db.commit()
     db.refresh(ident)
@@ -210,14 +203,7 @@ def usdt_price(db: Session) -> float:
 
 
 def add_event(db: Session, order: Order, dest: str, reason: str) -> None:
-    db.add(
-        OrderEvent(
-            order_id=order.id,
-            from_status=order.status,
-            to_status=dest,
-            reason=reason,
-        )
-    )
+    db.add(OrderEvent(order_id=order.id, from_status=order.status, to_status=dest, reason=reason))
     order.status = dest
 
 
@@ -236,4 +222,31 @@ def activate_order(db: Session, order: Order) -> Tenant:
     order.period_end = period_end
     add_event(db, order, "active", "entitlement_granted")
     save_paid_profile(db, tenant, SimpleNamespace(id=tenant.owner_tg_id, username=None, full_name=""))
+    return tenant
+
+
+def fulfill_stars_order(db: Session, *, user_id: int = 0, payload: str = "", charge_id: str = "", user=None) -> Tenant | None:
+    order = None
+    if payload:
+        order = db.scalar(select(Order).where(Order.payload == payload))
+    if not order and user_id:
+        tenant = get_or_create_tenant(db, user_id)
+        order = db.scalar(
+            select(Order)
+            .where(Order.tenant_id == tenant.id, Order.rail == "stars", Order.status.in_(("pending", "paid")))
+            .order_by(Order.id.desc())
+        )
+    if not order:
+        return None
+    if order.status == "active":
+        return db.get(Tenant, order.tenant_id)
+    if charge_id:
+        order.telegram_charge_id = charge_id
+    if order.status == "pending":
+        add_event(db, order, "paid", "stars_paid")
+    tenant = activate_order(db, order)
+    if user is not None:
+        save_paid_profile(db, tenant, user)
+    elif user_id:
+        save_paid_profile(db, tenant, SimpleNamespace(id=user_id, username=None, full_name=""))
     return tenant
