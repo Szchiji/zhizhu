@@ -202,6 +202,20 @@ def usdt_price(db: Session) -> float:
     return max(0.01, n)
 
 
+def unique_usdt_amount(db: Session, base: float) -> float:
+    amount = round(max(0.01, float(base)), 2)
+    used = {
+        round(float(row.amount), 2)
+        for row in db.scalars(
+            select(Order).where(Order.rail == "usdt", Order.status.in_(("draft", "pending", "confirming")))
+        )
+    }
+    extra = 0
+    while round(amount + extra / 100.0, 2) in used and extra < 99:
+        extra += 1
+    return round(amount + extra / 100.0, 2)
+
+
 def add_event(db: Session, order: Order, dest: str, reason: str) -> None:
     db.add(OrderEvent(order_id=order.id, from_status=order.status, to_status=dest, reason=reason))
     order.status = dest
