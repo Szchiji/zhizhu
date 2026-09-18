@@ -111,8 +111,6 @@ async def describe_channel(channel: str) -> tuple[str, str]:
     if not title:
         if raw.startswith("@"):
             title = raw
-        elif raw.startswith("http"):
-            title = "指定频道"
         else:
             title = "指定频道"
     return title, url
@@ -123,8 +121,14 @@ async def joined_channel(user_id: int, channel: str) -> bool:
         return True
     chat = channel_chat_id(channel)
     if isinstance(chat, str) and chat.startswith("http"):
-        stored = get_setting(get_session(), "force_channel_chat", channel)
+        db = get_session()
+        try:
+            stored = get_setting(db, "force_channel_chat", "") or get_setting(db, "force_channel", channel)
+        finally:
+            db.close()
         chat = channel_chat_id(stored) if stored else chat
+        if isinstance(chat, str) and chat.startswith("http"):
+            return False
     try:
         member = await _bot.get_chat_member(chat, user_id)
         return member.status in {"creator", "administrator", "member", "restricted"}
@@ -144,26 +148,22 @@ async def gate_user(user_id: int) -> tuple[str | None, str]:
             return "账号已被停用，无法使用本机器人。", ""
         on = force_on(db)
         channel = force_channel(db)
-        title = get_setting(db, "force_channel_title", "")
-        url = get_setting(db, "force_channel_url", "")
     finally:
         db.close()
     if not (on and channel):
         return None, ""
-    if not await joined_channel(user_id, channel):
-        if not title or not url:
-            title, url = await describe_channel(channel)
-            db = get_session()
-            try:
-                if title:
-                    set_setting(db, "force_channel_title", title)
-                if url:
-                    set_setting(db, "force_channel_url", url)
-            finally:
-                db.close()
-        shown = title or "指定频道"
-        return f"请先订阅频道「{shown}」后再使用。", url or channel_link(channel)
-    return None, ""
+    if await joined_channel(user_id, channel):
+        return None, ""
+    title, url = await describe_channel(channel)
+    db = get_session()
+    try:
+        if title:
+            set_setting(db, "force_channel_title", title)
+        if url:
+            set_setting(db, "force_channel_url", url)
+    finally:
+        db.close()
+    return f"请先订阅频道「{title or '指定频道'}」后再使用。", url or channel_link(channel)
 
 
 def subscribe_kb(url: str) -> InlineKeyboardMarkup | None:
