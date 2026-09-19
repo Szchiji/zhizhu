@@ -81,15 +81,19 @@ def promo_text(bot_name: str = "", name: str = "") -> str:
     bot = _bot(bot_name)
     brand = brand_name()
     lines = [
-        f"{BADGE} {brand}官方核验来源：@{bot}",
+        f"{BADGE} {brand} 官方核验来源：@{bot}",
         "━━━━━━━━━━━━",
     ]
     if name:
-        lines += [f"@{name} 目前尚未完成登记", "━━━━━━━━━━━━"]
+        lines += [
+            f"@{name.lstrip('@')} 尚未完成官方登记",
+            "本机器人暂无该账号的有效资料",
+            "━━━━━━━━━━━━",
+        ]
     lines += [
-        "谨防仿冒：请以本机器人实时查询结果为准",
-        f"如需查询，请在输入框内输入：@{bot} + 用户名",
-        "如需获取官方核验卡，请点击下方「开通官方核验」",
+        "谨防仿冒：只认本机器人实时查询结果",
+        f"查询：任意输入框输入  @{bot} + 用户名",
+        "申请官方卡：点下方「开通官方核验」",
     ]
     return "\n".join(lines)
 
@@ -101,7 +105,7 @@ def card_kb(ident: Identity | None = None, *, share_url: str = "", bot_username:
     if uname and is_platform_bot(uname, bot):
         return issuer_kb(bot)
     rows: list[list[InlineKeyboardButton]] = []
-    if uname:
+    if ident and uname:
         rows.append([InlineKeyboardButton("联系他", url=f"https://t.me/{uname}")])
     rows.append([InlineKeyboardButton("再查一个", switch_inline_query_current_chat="")])
     rows.append([InlineKeyboardButton("开通官方核验", url=f"https://t.me/{bot}?startapp")])
