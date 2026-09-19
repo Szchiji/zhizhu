@@ -2,20 +2,25 @@ from __future__ import annotations
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
-from app.brand import brand_name, bot_username
+from app.brand import bot_aliases, brand_name, bot_username
 from app.models import Identity
 
 BADGE = "🛡️"
 
 
 def _bot(name: str = "") -> str:
-    return (name or bot_username()).lstrip("@")
+    return (bot_username() or name or "").lstrip("@")
 
 
 def is_platform_bot(query: str, bot_name: str = "") -> bool:
-    q = (query or "").strip().lstrip("@").split()[0]
-    bot = _bot(bot_name)
-    return bool(q and bot and q.lower() == bot.lower())
+    q = (query or "").strip().lstrip("@").split()[0].lower()
+    if not q:
+        return False
+    names = bot_aliases()
+    extra = (bot_name or "").lstrip("@").lower()
+    if extra:
+        names.add(extra)
+    return q in names
 
 
 def issuer_text(bot_username: str = "") -> str:
