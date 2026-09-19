@@ -59,7 +59,7 @@ async def on_inline(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         except Exception:
             log.exception("inline deny")
         return
-    bot_name = (context.bot.username or bot_username() or "bot").lstrip("@")
+    bot_name = (bot_username() or context.bot.username or "bot").lstrip("@")
     brand = brand_name() or "官方核验"
     raw = (q.query or "").strip()
     name = parse_username(raw) or raw.lstrip("@").split()[0] if raw else ""
@@ -67,7 +67,7 @@ async def on_inline(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     desc = "点击发送官方卡" if name else "输入用户名查询"
     body = promo_text(bot_name, name)
     markup = card_kb(username=name, bot_username=bot_name)
-    if name and is_platform_bot(name, bot_name):
+    if name and is_platform_bot(name, context.bot.username or bot_name):
         title = f"🛡️ {brand} 官方出具方"
         desc = "本账号为核验机器人"
         body = issuer_text(bot_name)
