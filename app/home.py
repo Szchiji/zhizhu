@@ -12,7 +12,8 @@ ACTIONS = ("mini", "lookup", "help", "url")
 
 DEFAULT = {
     "title": "",
-    "body_unpaid": "在任意输入框输入  @{机器人} + 用户名\n即可查看是否已官方登记。\n\n开通后自动生成资料卡，可在小程序改姓名和正文。",
+    "body_unpaid": "在任意输入框输入  @{机器人} + 用户名\n即可查看是否已官方登记。\n\
+开通后自动生成资料卡，可在小程序改姓名和正文。",
     "body_paid": "你的官方登记已生效。\n群里输入  @{机器人} + 用户名  即可出卡。\n改资料请点左下角「小程序」。",
     "help": "使用说明\n\n1. 查询：在任意输入框输入 @{机器人} + 用户名\n2. 开通：点「开通 / 续费」打开小程序\n3. 改资料：小程序 → 我的",
     "btns": [
@@ -21,6 +22,10 @@ DEFAULT = {
         {"label": "使用说明", "action": "help", "url": ""},
     ],
 }
+
+
+def _shown_bot(bot: str = "") -> str:
+    return (bot_username() or bot or "").lstrip("@")
 
 
 def _mini_url() -> str:
@@ -94,7 +99,7 @@ def save_home(db, body: dict) -> dict:
 
 
 def fill(text: str, *, bot: str = "", until: str = "", username: str = "", name: str = "") -> str:
-    bot = (bot or bot_username()).lstrip("@")
+    bot = _shown_bot(bot)
     return (
         (text or "")
         .replace("{品牌}", brand_name())
@@ -107,7 +112,7 @@ def fill(text: str, *, bot: str = "", until: str = "", username: str = "", name:
 
 
 def home_kb(cfg: dict, *, bot: str = "", mini: str = "") -> InlineKeyboardMarkup:
-    bot = (bot or bot_username()).lstrip("@")
+    bot = _shown_bot(bot)
     mini = mini or _mini_url()
     rows: list[list[InlineKeyboardButton]] = []
     for item in cfg.get("btns") or []:
@@ -132,7 +137,7 @@ def home_kb(cfg: dict, *, bot: str = "", mini: str = "") -> InlineKeyboardMarkup
 def render_start(db, tenant, ident=None, *, bot: str = "", admin: bool = False) -> tuple[str, InlineKeyboardMarkup]:
     cfg = load_home(db)
     paid = tenant_usable(tenant)
-    bot = (bot or bot_username()).lstrip("@")
+    bot = _shown_bot(bot)
     uname = f"@{ident.username}" if ident and ident.username else "未同步用户名"
     name = (ident.display_name if ident else "") or ""
     until = fmt_until(tenant.paid_until) if tenant.paid_until else ("管理员" if paid else "未开通")
