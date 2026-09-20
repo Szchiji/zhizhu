@@ -53,7 +53,9 @@ def mount_card_admin(app) -> None:
             else:
                 data = save_tpl(db, body)
                 add_admin_audit(db, admin, "card_save", target_type="card_tpl", target_id=str(data.get("pack") or ""), detail="save_tpl")
+            # save_tpl already commits settings; commit audit row
             db.commit()
+            data = load_tpl(db)
             return {"ok": True, "card_tpl": data}
         finally:
             db.close()
