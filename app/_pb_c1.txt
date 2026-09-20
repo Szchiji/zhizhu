@@ -36,3 +36,4 @@ async def _show_admin(message, db) -> None:
     addr = _pay_address(db) or '未设'
     pending = list(db.scalars(select(Order).where(Order.rail == 'usdt', Order.status.in_(('pending', 'confirming'))).order_by(Order.id.desc()).limit(8)))
     lines = [f'管理后台\n\n{price_board(db)}', f'收款地址：{addr}', '', '待确认订单（订单号即 VH- 开头）']
+  
