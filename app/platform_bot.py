@@ -1,4 +1,1 @@
-from __future__ import annotations
-
-# TEMP marker - will be replaced
-PLACEHOLDER2
+PLACEHOLDER_WILL_REPLACE_WITH_REAL_VIA_PUSH_FILES
