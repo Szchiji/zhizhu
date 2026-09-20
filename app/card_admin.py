@@ -1,12 +1,16 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 from fastapi import Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, Response
 
 from app.card_tpl import apply_pack, load_tpl, save_tpl
 from app.config import ADMIN_TG_IDS
 from app.db import get_session
 from app.tg_webapp import user_id_from_init
+
+JS_PATH = Path(__file__).resolve().parent / "templates" / "mini.js"
 
 
 def _admin(body=None, user_id: int = 0, init_data: str = "") -> int:
@@ -26,6 +30,12 @@ def _admin(body=None, user_id: int = 0, init_data: str = "") -> int:
 
 
 def mount_card_admin(app) -> None:
+    @app.get("/mini.js")
+    async def mini_js():
+        if JS_PATH.exists():
+            return FileResponse(JS_PATH, media_type="text/javascript; charset=utf-8")
+        return Response("console.error('mini.js missing')", media_type="text/javascript")
+
     @app.get("/api/mini/admin/card")
     async def get_card(user_id: int = 0, init_data: str = ""):
         if not _admin(user_id=user_id, init_data=init_data):
