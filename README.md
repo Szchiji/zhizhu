@@ -1,11 +1,7 @@
-# VerifyHub（仓库名 zhizhu）
+# VerifyHub
 
-产品名 **VerifyHub**；GitHub 仓库 https://github.com/Szchiji/zhizhu（历史/目录名 zhizhu，本 PR 不改仓名）。
-对外文案以「平台登记」为准；`BRAND_*` / HeYanHQ 相关环境变量保持原样。
-
-Telegram 平台身份登记与查询：小程序为主，机器人为辅。
-充值后自动登记资料，群里 `@机器人 + 用户名` 出登记卡。
-登记由本平台出具并可撤销，以机器人实时查询为准（非政府/第三方「官方」背书）。
+Telegram 身份登记平台：小程序为主，机器人为辅。
+充值后自动登记资料，群里 `@机器人 + 用户名` 出平台登记卡。
 
 仓库：https://github.com/Szchiji/zhizhu
 
@@ -16,6 +12,8 @@ Telegram 平台身份登记与查询：小程序为主，机器人为辅。
 - 开通后自动录入用户名 / ID / 姓名，可在「我的」里改
 - 内联卡 + 私聊查询，品牌跟 BotFather 名字
 - 后台可改价、收款地址、首页文案、续费提醒、强制订阅、补登记 / 拉黑
+
+说明：这里的「登记」是本平台记录与查询，不是政府或第三方权威背书；卡片效力以机器人实时查询为准，平台可撤销。
 
 ## Railway
 
@@ -30,64 +28,27 @@ PUBLIC_BASE_URL=https://你的域名
 WEBHOOK_SECRET=随机串
 ADMIN_TG_IDS=你的电报数字ID
 USDT_ADDRESS=TRC20地址
-USDT_CONFIRM_SECRET=随机长串
 TRONGRID_API_KEY=trongrid.io 免费 key
 TOKEN_ENC_KEY=随机串
+USDT_CONFIRM_SECRET=随机串
 ```
 
 可选：`BRAND_NAME` `BRAND_TITLE` `不填则用机器人 getMe 名字`。
 
-可选限流（进程内内存，重启清零；多副本各自计数）：
+4. `域名/healthz` 返回 `{"ok":true}`
+5. BotFather：`/setinline` 、`/setjoingroups` 、`/setmenubutton` 可选
+6. 发 `/start`，左下角「小程序」
 
-```
-USDT_CONFIRM_IP_LIMIT=20
-USDT_CONFIRM_IP_WINDOW=60
-USDT_CONFIRM_CODE_LIMIT=10
-USDT_CONFIRM_CODE_WINDOW=60
-```
+启动命令会先跑 `python -m app.migrate`（Alembic），再起 uvicorn。已有库若还没有 `alembic_version`，会自动 stamp 再升级。
 
-4. 启动命令（`Procfile` / `railway.toml`）会先跑迁移再起服务：
+## 开发与测试
 
-```
-python -m app.migrate && uvicorn app.main:app --host 0.0.0.0 --port $PORT
-```
-
-5. `域名/healthz` 返回 `{"ok":true}`
-6. BotFather：`/setinline` 、`/setjoingroups` 、`/setmenubutton` 可选
-7. 发 `/start`，左下角「小程序」
-
-## 数据库迁移（Alembic）
-
-- 迁移目录：`alembic/versions/`；当前 head = 初始全量表结构（含 `admin_audits`）。
-- **Railway**：每次进程启动执行 `python -m app.migrate` → 必要时对「已有表、无 alembic_version」的旧库自动 `stamp head`，再 `alembic upgrade head`。
-- **本地 / 开发**：仍可用 lifespan 里的 `init_db()` / `create_all`（只增不改列）。也可用：
-
-```
-alembic upgrade head
-# 或
-python -m app.migrate
-```
-
-### 已有生产库如何 baseline（手动）
-
-若自动 stamp 未跑、或你想手工对齐：
-
-```
-# 在已连上 DATABASE_URL 的环境里（Railway shell / 本地指向生产时务必谨慎）
-alembic stamp head
-```
-
-含义：表已由历史 `create_all` 建好，只登记「当前 schema = head」，后续增量 migration 才会真正 `ALTER`/`CREATE`。
-**不要**在空库上 stamp（空库应直接 `upgrade head`）。
-
-## 测试
-
-```
+```bash
 pip install -r requirements-dev.txt
 pytest -q
 ```
 
-覆盖：`init_data` HMAC（合法通过 / 仅 user_id 拒绝）、`card_tpl` HTML 转义、USDT confirm 密钥未配置 fail-closed + 内存限流。不连真实 Telegram / 生产库。
+推送到 `main` 或开 PR 时，GitHub Actions（`.github/workflows/ci.yml`）会自动跑同一套 `pytest`。
 
 ## 闭环
 
@@ -102,5 +63,4 @@ pytest -q
 - 小程序改完后先关再开，避免旧缓存
 - 用户列表 / 订单列表要搜才出
 - 首页文案保存后重新 `/start`
-- `POST /api/usdt/confirm` 必须配置 `USDT_CONFIRM_SECRET`；确认尝试写入应用日志，已知订单额外写入 `order_events`
-- 管理端改价 / 确认订单 / 补登记 / 拉黑等写入 `admin_audits`（who / what / when / target）
+- USDT 确认密钥未配置时确认接口会 503
