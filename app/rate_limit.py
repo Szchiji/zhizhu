@@ -66,6 +66,7 @@ class RedisSlidingWindowLimiter:
         now = time.time()
         window = max(0.1, float(window_sec))
         rk = f"{self._prefix}{key}"
+        # Trim then check count atomically enough for rate limiting.
         pipe = self._r.pipeline()
         pipe.zremrangebyscore(rk, 0, now - window)
         pipe.zcard(rk)
