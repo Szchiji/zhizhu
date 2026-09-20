@@ -22,7 +22,7 @@ ADMIN_TG_IDS = _ids(os.getenv("ADMIN_TG_IDS", ""))
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./zhizhu.sqlite3")
 
 BRAND_NAME = os.getenv("BRAND_NAME", "")
-BRAND_TITLE = os.getenv("BRAND_TITLE", "官方身份核验")
+BRAND_TITLE = os.getenv("BRAND_TITLE", "平台身份登记")
 BOT_USERNAME = os.getenv("BOT_USERNAME", "").lstrip("@")
 MENU_TEXT = os.getenv("MENU_TEXT", "小程序")
 
