@@ -10,7 +10,7 @@ from app.brand import brand_name, bot_username
 from app.config import PUBLIC_BASE_URL, WEBHOOK_BASE_URL
 from app.db import get_session
 from app.services import parse_username, resolve_paid_identity
-from app.verify import card_kb, card_text, issuer_kb, issuer_text, is_platform_bot, promo_text
+from app.verify import PARSE_MODE, card_kb, card_text, issuer_kb, issuer_text, is_platform_bot, promo_text
 
 log = logging.getLogger("zhizhu.inline")
 
@@ -91,7 +91,7 @@ async def on_inline(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         id=(q.id or "r1")[:64],
         title=title,
         description=desc,
-        input_message_content=InputTextMessageContent(body),
+        input_message_content=InputTextMessageContent(body, parse_mode=PARSE_MODE),
         reply_markup=markup,
     )
     try:
