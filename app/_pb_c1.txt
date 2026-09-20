@@ -10,6 +10,8 @@
 
 
 async def _send_lookup(message, db, name: str, bot_name: str, bot=None, user=None) -> None:
+    if user is not None and await deny_message(message, user.id):
+        return
     if not name:
         await message.reply_text('请发送对方用户名，例如 @username')
         return

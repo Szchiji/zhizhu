@@ -47,18 +47,27 @@ async def on_inline(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not q:
         return
     uid = q.from_user.id if q.from_user else 0
-    thumb = await _thumb(context.bot)
+    # Fail suspended/blocked users immediately (before avatar thumb fetch).
     reason, _url = await gate_user(uid)
     if reason:
         try:
             await q.answer(
-                [_article(thumb, id="denied", title="暂不可用", description=reason, input_message_content=InputTextMessageContent(reason))],
+                [
+                    _article(
+                        "",
+                        id="denied",
+                        title="暂不可用",
+                        description=reason[:64],
+                        input_message_content=InputTextMessageContent(reason),
+                    )
+                ],
                 cache_time=0,
                 is_personal=True,
             )
         except Exception:
             log.exception("inline deny")
         return
+    thumb = await _thumb(context.bot)
     bot_name = (bot_username() or context.bot.username or "bot").lstrip("@")
     brand = brand_name() or "平台登记"
     raw = (q.query or "").strip()

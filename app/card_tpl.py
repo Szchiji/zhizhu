@@ -26,6 +26,7 @@ DEFAULTS = {
         "姓名：{姓名}\n"
         "账号：{账号}\n"
         "ID：{ID}\n"
+        "有效期：{有效期}\n"
         "━━━━━━━━━━━━\n"
         "{正文}\n"
         + FOOT
@@ -55,7 +56,7 @@ DEFAULTS = {
 PACK_BODIES = {
     "official": {k: DEFAULTS[k] for k in KEYS},
     "brief": {
-        "paid": "✅ {品牌} 平台登记\n@{机器人}\n\n{姓名}\n{账号}\nID {ID}\n\n{正文}\n" + FOOT,
+        "paid": "✅ {品牌} 平台登记\n@{机器人}\n\n{姓名}\n{账号}\nID {ID}\n有效期 {有效期}\n\n{正文}\n" + FOOT,
         "unpaid": "{品牌} 查询结果\n\n{查询词} 尚未登记\n暂无有效资料\n" + FOOT,
         "issuer": "🛡️ {品牌} 出具方\n@{机器人}\n\n本账号出具平台登记卡，不是个人登记\n效力以实时查询为准，平台可撤销\n〇 查个人：@{机器人} + 用户名",
     },
@@ -135,6 +136,7 @@ def _ctx(extra: dict | None = None) -> dict:
         "ID": "—",
         "正文": "",
         "查询词": "",
+        "有效期": "—",
     }
     if extra:
         data.update({k: v for k, v in extra.items() if v is not None})
