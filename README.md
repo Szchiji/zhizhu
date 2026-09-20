@@ -82,14 +82,10 @@ alembic stamp head
 
 ## 测试
 
-本地：
-
 ```
 pip install -r requirements-dev.txt
 pytest -q
 ```
-
-CI：GitHub Actions（`.github/workflows/ci.yml`）在 push 到 `main` 以及所有 pull request 时自动跑 `pytest -q`（Python 3.12，与 `runtime.txt` 一致）。无需 secrets。
 
 覆盖：`init_data` HMAC（合法通过 / 仅 user_id 拒绝）、`card_tpl` HTML 转义、USDT confirm 密钥未配置 fail-closed + 内存限流。不连真实 Telegram / 生产库。
 
