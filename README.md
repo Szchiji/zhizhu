@@ -1,4 +1,7 @@
-# VerifyHub
+# VerifyHub（仓库名 zhizhu）
+
+产品名 **VerifyHub**；GitHub 仓库 https://github.com/Szchiji/zhizhu（历史/目录名 zhizhu，本 PR 不改仓名）。
+对外文案以「平台登记」为准；`BRAND_*` / HeYanHQ 相关环境变量保持原样。
 
 Telegram 平台身份登记与查询：小程序为主，机器人为辅。
 充值后自动登记资料，群里 `@机器人 + 用户名` 出登记卡。
@@ -43,9 +46,48 @@ USDT_CONFIRM_CODE_LIMIT=10
 USDT_CONFIRM_CODE_WINDOW=60
 ```
 
-4. `域名/healthz` 返回 `{"ok":true}`
-5. BotFather：`/setinline` 、`/setjoingroups` 、`/setmenubutton` 可选
-6. 发 `/start`，左下角「小程序」
+4. 启动命令（`Procfile` / `railway.toml`）会先跑迁移再起服务：
+
+```
+python -m app.migrate && uvicorn app.main:app --host 0.0.0.0 --port $PORT
+```
+
+5. `域名/healthz` 返回 `{"ok":true}`
+6. BotFather：`/setinline` 、`/setjoingroups` 、`/setmenubutton` 可选
+7. 发 `/start`，左下角「小程序」
+
+## 数据库迁移（Alembic）
+
+- 迁移目录：`alembic/versions/`；当前 head = 初始全量表结构（含 `admin_audits`）。
+- **Railway**：每次进程启动执行 `python -m app.migrate` → 必要时对「已有表、无 alembic_version」的旧库自动 `stamp head`，再 `alembic upgrade head`。
+- **本地 / 开发**：仍可用 lifespan 里的 `init_db()` / `create_all`（只增不改列）。也可用：
+
+```
+alembic upgrade head
+# 或
+python -m app.migrate
+```
+
+### 已有生产库如何 baseline（手动）
+
+若自动 stamp 未跑、或你想手工对齐：
+
+```
+# 在已连上 DATABASE_URL 的环境里（Railway shell / 本地指向生产时务必谨慎）
+alembic stamp head
+```
+
+含义：表已由历史 `create_all` 建好，只登记「当前 schema = head」，后续增量 migration 才会真正 `ALTER`/`CREATE`。
+**不要**在空库上 stamp（空库应直接 `upgrade head`）。
+
+## 测试
+
+```
+pip install -r requirements-dev.txt
+pytest -q
+```
+
+覆盖：`init_data` HMAC（合法通过 / 仅 user_id 拒绝）、`card_tpl` HTML 转义、USDT confirm 密钥未配置 fail-closed + 内存限流。不连真实 Telegram / 生产库。
 
 ## 闭环
 

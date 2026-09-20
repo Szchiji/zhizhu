@@ -28,6 +28,13 @@ SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
 
 
 def init_db() -> None:
+    """Ensure tables exist for local/dev (create_all is additive).
+
+    Production Railway runs `python -m app.migrate` (Alembic) before uvicorn.
+    create_all remains so sqlite/dev still works without a migrate step, and
+    so a missing table (e.g. after a hot model add) is created without blocking
+    boot. It does not alter existing columns.
+    """
     from app import models  # noqa: F401
 
     Base.metadata.create_all(bind=engine)
