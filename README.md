@@ -26,11 +26,21 @@ PUBLIC_BASE_URL=https://你的域名
 WEBHOOK_SECRET=随机串
 ADMIN_TG_IDS=你的电报数字ID
 USDT_ADDRESS=TRC20地址
+USDT_CONFIRM_SECRET=随机长串
 TRONGRID_API_KEY=trongrid.io 免费 key
 TOKEN_ENC_KEY=随机串
 ```
 
 可选：`BRAND_NAME` `BRAND_TITLE` `不填则用机器人 getMe 名字`。
+
+可选限流（进程内内存，重启清零；多副本各自计数）：
+
+```
+USDT_CONFIRM_IP_LIMIT=20
+USDT_CONFIRM_IP_WINDOW=60
+USDT_CONFIRM_CODE_LIMIT=10
+USDT_CONFIRM_CODE_WINDOW=60
+```
 
 4. `域名/healthz` 返回 `{"ok":true}`
 5. BotFather：`/setinline` 、`/setjoingroups` 、`/setmenubutton` 可选
@@ -49,3 +59,4 @@ TOKEN_ENC_KEY=随机串
 - 小程序改完后先关再开，避免旧缓存
 - 用户列表 / 订单列表要搜才出
 - 首页文案保存后重新 `/start`
+- `POST /api/usdt/confirm` 必须配置 `USDT_CONFIRM_SECRET`；确认尝试写入应用日志，已知订单额外写入 `order_events`
