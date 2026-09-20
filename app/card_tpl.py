@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import html
 import json
 import re
 
@@ -8,9 +9,9 @@ from app.brand import brand_name, bot_username
 KEYS = ("paid", "unpaid", "issuer")
 PACKS = ("official", "brief", "pass")
 FOOT = (
-    "▍ 谨防仿冒：只认本机器人实时查询结果\n"
-    "▍ 查询：任意输入框输入  @{机器人} + 用户名\n"
-    "▍ 申请官方卡：点下方「开通官方核验」"
+    "〇 谨防仿冒：只认本机器人实时查询结果\n"
+    "〇 查询：任意输入框输入  @{机器人} + 用户名\n"
+    "〇 申请官方卡：点下方「开通官方核验」"
 )
 
 DEFAULTS = {
@@ -41,8 +42,8 @@ DEFAULTS = {
         "本账号为平台核验机器人\n"
         "负责出具官方登记卡，不是个人身份登记\n"
         "━━━━━━━━━━━━\n"
-        "▍ 查个人请输入：@{机器人} + 对方用户名\n"
-        "▍ 申请官方卡：点下方「开通官方核验」"
+        "〇 查个人请输入：@{机器人} + 对方用户名\n"
+        "〇 申请官方卡：点下方「开通官方核验」"
     ),
 }
 
@@ -51,12 +52,12 @@ PACK_BODIES = {
     "brief": {
         "paid": "✅ {品牌} 官方登记\n@{机器人}\n\n{姓名}\n{账号}\nID {ID}\n\n{正文}\n" + FOOT,
         "unpaid": "{品牌} 查询结果\n\n{查询词} 尚未登记\n暂无有效资料\n" + FOOT,
-        "issuer": "🛡️ {品牌} 出具方\n@{机器人}\n\n本账号出具官方登记卡，不是个人登记\n▍ 查个人：@{机器人} + 用户名",
+        "issuer": "🛡️ {品牌} 出具方\n@{机器人}\n\n本账号出具官方登记卡，不是个人登记\n〇 查个人：@{机器人} + 用户名",
     },
     "pass": {
-        "paid": "🛡️ {品牌}\n官方身份登记\n\n姓名\t{姓名}\n账号\t{账号}\n编号\t{ID}\n\n{正文}\n▍ 以 @{机器人} 实时查询为准",
+        "paid": "🛡️ {品牌}\n官方身份登记\n\n姓名\t{姓名}\n账号\t{账号}\n编号\t{ID}\n\n{正文}\n〇 以 @{机器人} 实时查询为准",
         "unpaid": "🛡️ {品牌}\n未找到官方登记\n\n查询对象\t{查询词}\n" + FOOT,
-        "issuer": "🛡️ {品牌}\n平台出具方\n\n账号\t@{机器人}\n性质\t核验机器人\n▍ 查个人：@{机器人} + 用户名",
+        "issuer": "🛡️ {品牌}\n平台出具方\n\n账号\t@{机器人}\n性质\t核验机器人\n〇 查个人：@{机器人} + 用户名",
     },
 }
 
@@ -136,10 +137,16 @@ def _ctx(extra: dict | None = None) -> dict:
 
 
 def fill(text: str, extra: dict | None = None) -> str:
+    """Fill placeholders. Dynamic values are HTML-escaped so user fields
+    (姓名/账号/正文/查询词/…) cannot inject Telegram HTML markup.
+    Static template text is left intact for intentional admin formatting.
+    """
     out = text or ""
     for key, value in _ctx(extra).items():
         raw = "" if value is None else str(value)
-        out = out.replace("{" + key + "}", raw)
+        # Telegram HTML: escape <>& in substituted values only.
+        safe = html.escape(raw, quote=False)
+        out = out.replace("{" + key + "}", safe)
     return re.sub(r"\n{3,}", "\n\n", out).strip()
 
 
