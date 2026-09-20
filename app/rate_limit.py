@@ -25,9 +25,23 @@ class RateLimiter(Protocol):
 
 
 class SlidingWindowLimiter:
-    """In-memory sliding window. Per-process only (not shared across replicas)."""
+    """In-memory sliding window. Per-process only (not shared across replicas).
+
+    Zero-arg ``SlidingWindowLimiter()`` (as in ``app.main``) routes through
+    ``get_limiter()`` so ``REDIS_URL`` is honored without changing call sites.
+    """
+
+    _direct = False
+
+    def __new__(cls, *args, **kwargs):
+        if cls is SlidingWindowLimiter and not args and not kwargs and not SlidingWindowLimiter._direct:
+            return get_limiter()
+        return object.__new__(cls)
 
     def __init__(self) -> None:
+        # Redis path returns a different type; memory path may hit __init__ once.
+        if hasattr(self, "_hits"):
+            return
         self._lock = threading.Lock()
         self._hits: dict[str, deque[float]] = defaultdict(deque)
 
@@ -95,7 +109,11 @@ def get_limiter() -> RateLimiter:
     """Build the process limiter: Redis when REDIS_URL works, else memory."""
     url = (os.getenv("REDIS_URL") or "").strip()
     if not url:
-        return SlidingWindowLimiter()
+        SlidingWindowLimiter._direct = True
+        try:
+            return SlidingWindowLimiter()
+        finally:
+            SlidingWindowLimiter._direct = False
     try:
         lim = RedisSlidingWindowLimiter(url)
         log.info("USDT confirm rate limit: Redis (%s)", url.split("@")[-1])
@@ -105,4 +123,8 @@ def get_limiter() -> RateLimiter:
             "REDIS_URL set but Redis unavailable (%s); using in-memory rate limit",
             exc,
         )
-        return SlidingWindowLimiter()
+        SlidingWindowLimiter._direct = True
+        try:
+            return SlidingWindowLimiter()
+        finally:
+            SlidingWindowLimiter._direct = False
