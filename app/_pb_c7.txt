@@ -1,0 +1,43 @@
+key: str) -> None:
+    if key not in PLANS:
+        key = 'year'
+    addr = _pay_address(db)
+    if not addr:
+        await message.reply_text('尚未配置 USDT 地址')
+        return
+    if open_order(db, tenant.id):
+        await message.reply_text('已有待支付订单。')
+        return
+    code = new_code()
+    amount = unique_usdt_amount(db, plan_usdt(db, key))
+    db.add(Order(public_code=code, tenant_id=tenant.id, rail='usdt', plan=key, period_days=PLANS[key]['days'], amount=amount, currency='USDT', chain=USDT_CHAIN, pay_address=addr, status='pending', expires_at=utcnow() + timedelta(minutes=20)))
+    db.commit()
+    await message.reply_text(f"{PLANS[key]['label']}  {amount:g} USDT\n订单 {code}\n20 分钟内有效")
+
+
+async def on_webapp(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    raw = update.effective_message.web_app_data.data if update.effective_message.web_app_data else ''
+    try:
+        data = json.loads(raw)
+    except Exception:
+        await update.effective_message.reply_text('小程序数据无效')
+        return
+    db = get_session()
+    try:
+        tenant = get_or_create_tenant(db, update.effective_user.id)
+        rail = str(data.get('rail') or 'stars')
+        key = str(data.get('plan') or 'year')
+        if rail == 'usdt':
+            await _pay_usdt(update.effective_message, tenant, db, key)
+        else:
+            await _pay_stars(update.effective_user.id, update.effective_message, context, tenant, db, key)
+    finally:
+        db.close()
+
+
+async def on_precheckout(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    q = update.pre_checkout_query
+    db = get_session()
+    try:
+        order = db.scalar(select(Order).where(Order.payload == q.invoice_payload))
+        if not order or order.status != 'pending' or int(order.amount) != q
