@@ -79,3 +79,5 @@ async def _show_admin(message, db) -> None:
     lines = [f'管理后台\n\n{price_board(db)}', f'收款地址：{addr}', '', '待确认订单（订单号即 VH- 开头）']
     lines.extend([f'{o.public_code}  {float(o.amount):g}U  {o.status}' for o in pending] or ['暂无待确认 USDT 订单'])
     await message.reply_text('\n'.join(lines), reply_markup=_kb_admin(db))
+
+
