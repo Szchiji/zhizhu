@@ -1,4 +1,4 @@
-"""Bot admin text/callback mutations write AdminAudit (mocked session)."""
+"""Bot admin text/callback mutations write AdminAudit via add_admin_audit."""
 from __future__ import annotations
 
 import asyncio
