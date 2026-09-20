@@ -6,6 +6,7 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 
 from app.brand import brand_name, brand_title, bot_username
 from app.config import PUBLIC_BASE_URL, WEBHOOK_BASE_URL
+from app.card_tpl import sanitize_telegram_html
 from app.services import fmt_until, get_setting, set_setting, tenant_usable
 
 ACTIONS = ("mini", "lookup", "help", "url")
@@ -89,9 +90,9 @@ def save_home(db, body: dict) -> dict:
         btns = [dict(x) for x in DEFAULT["btns"]]
     data = {
         "title": str(body.get("title") or "")[:40],
-        "body_unpaid": str(body.get("body_unpaid") or DEFAULT["body_unpaid"])[:500],
-        "body_paid": str(body.get("body_paid") or DEFAULT["body_paid"])[:500],
-        "help": str(body.get("help") or DEFAULT["help"])[:800],
+        "body_unpaid": sanitize_telegram_html(str(body.get("body_unpaid") or DEFAULT["body_unpaid"]))[:500],
+        "body_paid": sanitize_telegram_html(str(body.get("body_paid") or DEFAULT["body_paid"]))[:500],
+        "help": sanitize_telegram_html(str(body.get("help") or DEFAULT["help"]))[:800],
         "btns": btns,
     }
     set_setting(db, "home_start", json.dumps(data, ensure_ascii=False))
