@@ -15,23 +15,13 @@ from app.home import load_home, save_home
 from app.models import Identity, Order, Tenant, utcnow
 from app.plans import clone_on, plan_stars, plan_usdt, price_board, set_clone
 from app.services import activate_order, add_event, fmt_until, get_or_create_tenant, get_setting, open_order, parse_username, set_setting
-from app.tg_webapp import user_id_from_init
+from app.tg_webapp import require_webapp_user
 
 
 def _uid(body: dict | None = None, user_id: int = 0, init_data: str = "") -> int:
-    uid = 0
-    if init_data:
-        uid = user_id_from_init(init_data)
-    if not uid and body:
-        uid = user_id_from_init(str(body.get("init_data") or ""))
-        if not uid:
-            try:
-                uid = int(body.get("user_id") or 0)
-            except (TypeError, ValueError):
-                uid = 0
-    if not uid:
-        uid = int(user_id or 0)
-    return uid
+    """Identity from verified Telegram WebApp init_data only (ignores bare user_id)."""
+    del user_id  # never trust client-supplied user_id as proof of identity
+    return require_webapp_user(init_data=init_data, body=body)
 
 
 def _admin_id(body: dict | None = None, user_id: int = 0, init_data: str = "") -> int:

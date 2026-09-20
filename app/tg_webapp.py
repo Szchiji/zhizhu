@@ -42,3 +42,17 @@ def user_from_init(init_data: str) -> dict:
 
 def user_id_from_init(init_data: str) -> int:
     return int(user_from_init(init_data).get("id") or 0)
+
+
+def require_webapp_user(init_data: str = "", body: dict | None = None) -> int:
+    """Return Telegram user id only from HMAC-verified WebApp init_data.
+
+    Never trusts client-supplied bare user_id. Returns 0 when init_data is
+    missing or fails verification (callers should respond 401).
+    """
+    raw = (init_data or "").strip()
+    if not raw and body is not None:
+        raw = str(body.get("init_data") or "").strip()
+    if not raw:
+        return 0
+    return user_id_from_init(raw)

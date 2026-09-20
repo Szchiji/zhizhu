@@ -48,7 +48,7 @@ from app.services import (
     unique_usdt_amount,
 )
 from app.tenant_bot import handle_tenant_update
-from app.tg_webapp import user_from_init, user_id_from_init
+from app.tg_webapp import require_webapp_user, user_from_init
 from app.usdt_watch import watch_loop
 from app.verify import card_text
 
@@ -59,19 +59,9 @@ platform_app = None
 
 
 def _uid(body: dict | None = None, user_id: int = 0, init_data: str = "") -> int:
-    if init_data:
-        n = user_id_from_init(init_data)
-        if n:
-            return n
-    if body:
-        n = user_id_from_init(str(body.get("init_data") or ""))
-        if n:
-            return n
-        try:
-            return int(body.get("user_id") or 0)
-        except (TypeError, ValueError):
-            return 0
-    return int(user_id or 0)
+    """Identity from verified Telegram WebApp init_data only (ignores bare user_id)."""
+    del user_id  # never trust client-supplied user_id as proof of identity
+    return require_webapp_user(init_data=init_data, body=body)
 
 
 def _drop_open_orders(db, tenant_id: int) -> None:
@@ -202,6 +192,7 @@ async def mini_me(user_id: int = 0, init_data: str = "", username: str = "", dis
 
 @app.get("/api/mini/lookup")
 async def mini_lookup(q: str = "", user_id: int = 0, init_data: str = ""):
+    # Public search; optional deny check only when init_data verifies (never bare user_id).
     uid = _uid(user_id=user_id, init_data=init_data)
     if uid:
         blocked = await deny_json(uid)

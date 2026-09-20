@@ -8,24 +8,15 @@ from fastapi.responses import FileResponse, JSONResponse, Response
 from app.card_tpl import apply_pack, load_tpl, save_tpl
 from app.config import ADMIN_TG_IDS
 from app.db import get_session
-from app.tg_webapp import user_id_from_init
+from app.tg_webapp import require_webapp_user
 
 JS_PATH = Path(__file__).resolve().parent / "templates" / "mini.js"
 
 
 def _admin(body=None, user_id: int = 0, init_data: str = "") -> int:
-    uid = 0
-    if init_data:
-        uid = user_id_from_init(init_data)
-    if not uid and body:
-        uid = user_id_from_init(str(body.get("init_data") or ""))
-        if not uid:
-            try:
-                uid = int(body.get("user_id") or 0)
-            except (TypeError, ValueError):
-                uid = 0
-    if not uid:
-        uid = int(user_id or 0)
+    """Admin identity from verified WebApp init_data only, then ADMIN_TG_IDS check."""
+    del user_id  # never trust client-supplied user_id as proof of identity
+    uid = require_webapp_user(init_data=init_data, body=body)
     return uid if uid in ADMIN_TG_IDS else 0
 
 
