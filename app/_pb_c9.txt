@@ -1,13 +1,3 @@
-  target_id="usdt_address",
-                detail=addr[:16] + "…",
-            )
-            db.commit()
-            context.user_data.pop('wait', None)
-            await update.effective_message.reply_text(f'收款地址已更新\n{addr}', reply_markup=_kb_admin(db))
-            return True
-        if wait.startswith('admin_price:'):
-            _, key, rail = wait.split(':')
-            try:
                 value = float(text.replace(',', ''))
             except ValueError:
                 await update.effective_message.reply_text('请只发数字')
@@ -41,4 +31,16 @@
                 db,
                 update.effective_user.id,
                 "confirm",
- 
+                target_type="order",
+                target_id=order.public_code,
+                detail=f"tenant={tenant.id};txid={order.txid or ''}",
+            )
+            db.commit()
+            context.user_data.pop('wait', None)
+            await update.effective_message.reply_text(f'{order.public_code} 已开通至 {fmt_until(tenant.paid_until)}', reply_markup=_kb_admin(db))
+            return True
+        return False
+    finally:
+        db.close()
+
+
