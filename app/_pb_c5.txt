@@ -1,0 +1,40 @@
+dmin')]]))
+        return True
+    if data.startswith('adm:pk:'):
+        key = data.split(':')[2]
+        await query.message.reply_text(
+            f"{PLANS[key]['label']} 现价 {plan_stars(db, key)}⭐ / {plan_usdt(db, key):g} U",
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton('Stars', callback_data=f'adm:pr:{key}:stars'), InlineKeyboardButton('USDT', callback_data=f'adm:pr:{key}:usdt')],[InlineKeyboardButton('返回', callback_data='adm:price')]]),
+        )
+        return True
+    if data.startswith('adm:pr:'):
+        _, _, key, rail = data.split(':')
+        context.user_data['wait'] = f'admin_price:{key}:{rail}'
+        await query.message.reply_text(f"发送新的 {PLANS[key]['label']} {'⭐' if rail=='stars' else 'USDT'} 价格")
+        return True
+    if data == 'adm:addr':
+        context.user_data['wait'] = 'admin_addr'
+        await query.message.reply_text(f"当前地址：{_pay_address(db) or '未设'}\n发送新的 TRC20 地址。")
+        return True
+    if data == 'adm:confirm':
+        context.user_data['wait'] = 'admin_confirm'
+        await query.message.reply_text('发送订单号，例如 VH-XXXXXX。')
+        await _show_admin(query.message, db)
+        return True
+    if data == 'adm:clone':
+        on = not clone_on(db)
+        set_clone(db, on)
+        add_admin_audit(db, query.from_user.id, "clone", target_type="setting", target_id="clone", detail=str(on))
+        db.commit()
+        await query.message.reply_text('克隆已开启' if on else '克隆已关闭', reply_markup=_kb_admin(db))
+        return True
+    return True
+
+
+async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    query = update.callback_query
+    await query.answer()
+    data = query.data or ''
+    db = get_session()
+    try:
+        if data not in {'admin'} and not data.startswith('
