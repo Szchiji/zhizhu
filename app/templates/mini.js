@@ -2,7 +2,19 @@ const tg=window.Telegram.WebApp;tg.ready();tg.expand();
 const user=(tg.initDataUnsafe&&tg.initDataUnsafe.user)||null;
 const initData=tg.initData||'';
 const err=document.getElementById('err'),ok=document.getElementById('ok');
-function show(el,msg){err.style.display='none';ok.style.display='none';el.style.display='block';el.textContent=msg;}
+function show(el,msg){
+  const text=String(msg||'');
+  const title=(el===err)?'操作失败':'已完成';
+  try{
+    if(tg.showPopup){
+      tg.showPopup({title:title,message:text,buttons:[{id:'ok',type:'ok',text:'好的'}]});
+      return;
+    }
+    if(tg.showAlert){tg.showAlert(text);return;}
+  }catch(e){}
+  err.style.display='none';ok.style.display='none';
+  el.style.display='block';el.textContent=text;
+}
 function tab(name){
 ['pay','q','me','adm'].forEach(n=>document.getElementById('tab-'+n).classList.toggle('hidden',n!==name));
 ['pay','q','me','adm'].forEach((n,i)=>document.getElementById('n'+(i+1)).classList.toggle('on',n===name));
@@ -128,7 +140,7 @@ document.getElementById('aorders').innerHTML=rows.length?rows.map(o=>'<div oncli
 async function confirmOrder(){try{await api('/api/mini/admin',{action:'confirm',code:document.getElementById('acode').value,txid:document.getElementById('atxid').value});show(ok,'订单已确认');}catch(e){show(err,e.message);}}
 async function saveHome(){
 const btns=[1,2,3].map(i=>({label:document.getElementById('hb'+i).value,action:document.getElementById('ha'+i).value})).filter(x=>x.label);
-try{await api('/api/mini/admin',{action:'home',title:document.getElementById('htitle').value,body_unpaid:document.getElementById('hbody0').value,body_paid:document.getElementById('hbody1').value,help:document.getElementById('hhelp').value,btns:btns});show(ok,'首页已保存，重新 /start 查看');}catch(e){show(err,e.message);}}
+try{await api('/api/mini/admin',{action:'home',title:document.getElementById('htitle').value,body_unpaid:document.getElementById('hbody0').value,body_paid:document.getElementById('hbody1').value,help:document.getElementById('hhelp').value,btns:btns});show(ok,'首页已保存。请回机器人重新发送 /start');}catch(e){show(err,e.message);}}
 async function save(){try{await api('/api/mini/profile',{display_name:document.getElementById('display').value,card_text:document.getElementById('card').value,username:user&&user.username});show(ok,'资料已生效');}catch(e){show(err,e.message);}}
 loadMe();
 async function loadCardTpl(){
@@ -144,7 +156,7 @@ document.getElementById('ctissuer').value=t.issuer||'';
 async function saveCardTpl(){
 try{
 await api('/api/mini/admin/card',{paid:document.getElementById('ctpaid').value,unpaid:document.getElementById('ctunpaid').value,issuer:document.getElementById('ctissuer').value});
-show(ok,'卡片模板已保存');
+show(ok,'卡片模板已保存。请重新查询一张卡核对，旧卡不会自动换文案');
 }catch(e){show(err,e.message);}
 }
 async function cardPack(pack){
@@ -154,6 +166,6 @@ const t=j.card_tpl||{};
 document.getElementById('ctpaid').value=t.paid||'';
 document.getElementById('ctunpaid').value=t.unpaid||'';
 document.getElementById('ctissuer').value=t.issuer||'';
-show(ok,'已套用格式包');
+show(ok,'已套用格式包，请再点保存模板');
 }catch(e){show(err,e.message);}
 }
