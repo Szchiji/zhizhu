@@ -14,7 +14,7 @@ from app.db import get_session
 from app.home import load_home, save_home
 from app.models import Identity, Order, Tenant, utcnow
 from app.plans import clone_on, plan_stars, plan_usdt, price_board, set_clone
-from app.services import activate_order, add_event, fmt_until, get_or_create_tenant, get_setting, open_order, parse_username, set_setting
+from app.services import activate_order, add_admin_audit, add_event, fmt_until, get_or_create_tenant, get_setting, open_order, parse_username, set_setting
 from app.tg_webapp import require_webapp_user
 
 
@@ -169,13 +169,19 @@ def mount_admin(app) -> None:
                     value = float(body.get("amount") or 0)
                 except (TypeError, ValueError):
                     raise HTTPException(400, "bad amount")
-                set_setting(db, "stars_year" if rail == "stars" else "usdt_year", str(int(value) if rail == "stars" else f"{value:g}"))
+                key = "stars_year" if rail == "stars" else "usdt_year"
+                stored = str(int(value) if rail == "stars" else f"{value:g}")
+                set_setting(db, key, stored)
+                add_admin_audit(db, admin, "price", target_type="setting", target_id=key, detail=f"amount={stored}")
+                db.commit()
                 return {"ok": True, "board": price_board(db)}
             if action == "addr":
                 addr = str(body.get("address") or "").strip()
                 if not addr.startswith("T") or len(addr) < 30:
                     return JSONResponse({"error": "TRC20 地址无效"}, status_code=400)
                 set_setting(db, "usdt_address", addr)
+                add_admin_audit(db, admin, "addr", target_type="setting", target_id="usdt_address", detail=addr[:16] + "…")
+                db.commit()
                 return {"ok": True}
             if action == "remind":
                 try:
@@ -186,6 +192,8 @@ def mount_admin(app) -> None:
                 set_setting(db, "remind_days", str(n))
                 set_setting(db, "remind_enabled", enabled)
                 set_setting(db, "remind_text", str(body.get("text") or "")[:300])
+                add_admin_audit(db, admin, "remind", target_type="setting", target_id="remind", detail=f"days={n};enabled={enabled}")
+                db.commit()
                 return {"ok": True, "remind_days": n, "remind_enabled": enabled}
             if action == "channel":
                 raw = normalize_channel(str(body.get("channel") or ""))
@@ -193,16 +201,26 @@ def mount_admin(app) -> None:
                 if "enabled" in body:
                     on = "1" if str(body.get("enabled")) in {"1", "true", "on"} else "0"
                     set_setting(db, "force_channel_on", on)
+                add_admin_audit(db, admin, "channel", target_type="setting", target_id="force_channel", detail=f"channel={raw};on={get_setting(db, 'force_channel_on', '0')}")
+                db.commit()
                 return {"ok": True, "force_channel": raw, "force_channel_on": get_setting(db, "force_channel_on", "0")}
             if action == "channel_toggle":
                 on = "0" if get_setting(db, "force_channel_on", "0") == "1" else "1"
                 set_setting(db, "force_channel_on", on)
+                add_admin_audit(db, admin, "channel_toggle", target_type="setting", target_id="force_channel_on", detail=on)
+                db.commit()
                 return {"ok": True, "force_channel_on": on, "force_channel": get_setting(db, "force_channel", "")}
             if action == "home":
-                return {"ok": True, "home": save_home(db, body)}
+                data = save_home(db, body)
+                add_admin_audit(db, admin, "home", target_type="setting", target_id="home_start", detail=(data.get("title") or "")[:80])
+                db.commit()
+                return {"ok": True, "home": data}
             if action == "clone":
                 set_clone(db, not clone_on(db))
-                return {"ok": True, "clone": clone_on(db)}
+                on = clone_on(db)
+                add_admin_audit(db, admin, "clone", target_type="setting", target_id="clone", detail=str(on))
+                db.commit()
+                return {"ok": True, "clone": on}
             if action == "confirm":
                 code = str(body.get("code") or "").upper()
                 order = db.scalar(select(Order).where(Order.public_code == code))
@@ -214,6 +232,15 @@ def mount_admin(app) -> None:
                     order.txid = str(body.get("txid"))
                 add_event(db, order, "paid", "mini_admin")
                 tenant = activate_order(db, order)
+                add_admin_audit(
+                    db,
+                    admin,
+                    "confirm",
+                    target_type="order",
+                    target_id=order.public_code,
+                    detail=f"tenant={tenant.id};txid={order.txid or ''}",
+                )
+                db.commit()
                 return {"ok": True, "paid_until": str(tenant.paid_until)}
             if action in {"user_add", "user_extend"}:
                 try:
@@ -239,6 +266,14 @@ def mount_admin(app) -> None:
                     if tenant.paid_until and tenant.paid_until > base:
                         base = tenant.paid_until
                     tenant.paid_until = base + timedelta(days=days)
+                add_admin_audit(
+                    db,
+                    admin,
+                    action,
+                    target_type="tenant",
+                    target_id=str(tenant.id),
+                    detail=f"tg_id={tg_id};days={days};username={uname or ''}",
+                )
                 db.commit()
                 return {"ok": True, "user": _dump_user(tenant), "days": days}
             if action in {"user_block", "user_unblock", "user_delete"}:
@@ -255,10 +290,12 @@ def mount_admin(app) -> None:
                     return JSONResponse({"error": "不能操作管理员"}, status_code=400)
                 if action == "user_block":
                     target.status = "suspended"
+                    add_admin_audit(db, admin, action, target_type="tenant", target_id=str(target.id), detail=f"tg_id={target.owner_tg_id}")
                     db.commit()
                     return {"ok": True, "user": _dump_user(target)}
                 if action == "user_unblock":
                     target.status = "active" if target.paid_until else "unpaid"
+                    add_admin_audit(db, admin, action, target_type="tenant", target_id=str(target.id), detail=f"tg_id={target.owner_tg_id};status={target.status}")
                     db.commit()
                     return {"ok": True, "user": _dump_user(target)}
                 ident = target.identity
@@ -270,6 +307,7 @@ def mount_admin(app) -> None:
                     ident.official_user_id = None
                 target.status = "unpaid"
                 target.paid_until = None
+                add_admin_audit(db, admin, action, target_type="tenant", target_id=str(target.id), detail=f"tg_id={target.owner_tg_id};cleared=1")
                 db.commit()
                 return {"ok": True}
             if action == "user_bind":
@@ -292,6 +330,14 @@ def mount_admin(app) -> None:
                 if body.get("display_name"):
                     ident.display_name = str(body.get("display_name"))[:64]
                 db.add(ident)
+                add_admin_audit(
+                    db,
+                    admin,
+                    "user_bind",
+                    target_type="tenant",
+                    target_id=str(tenant.id),
+                    detail=f"tg_id={tenant.owner_tg_id};username={name}",
+                )
                 db.commit()
                 return {"ok": True, "user": _dump_user(tenant)}
             return JSONResponse({"error": "unknown action"}, status_code=400)
