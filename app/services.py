@@ -236,6 +236,18 @@ def add_event(db: Session, order: Order, dest: str, reason: str) -> None:
     order.status = dest
 
 
+def audit_order_event(db: Session, order: Order, reason: str) -> None:
+    """Append an OrderEvent without mutating order.status (denials / idempotent hits)."""
+    db.add(
+        OrderEvent(
+            order_id=order.id,
+            from_status=order.status,
+            to_status=order.status,
+            reason=(reason or "")[:64],
+        )
+    )
+
+
 def activate_order(db: Session, order: Order) -> Tenant:
     tenant = db.get(Tenant, order.tenant_id)
     base = utcnow()
@@ -255,14 +267,28 @@ def activate_order(db: Session, order: Order) -> Tenant:
 
 
 def fulfill_stars_order(db: Session, *, user_id: int = 0, payload: str = "", charge_id: str = "", user=None) -> Tenant | None:
+    """Activate a Stars order only when a Telegram payment record exists.
+
+    Real payment path: webhook successful_payment sets telegram_charge_id then activates.
+    Client callbacks (/api/mini/stars-paid, /api/mini/me) must not forge activation from a bare pending order.
+    """
     order = None
+    caller_tenant = None
+    if user_id:
+        caller_tenant = get_or_create_tenant(db, user_id)
     if payload:
         order = db.scalar(select(Order).where(Order.payload == payload))
-    if not order and user_id:
-        tenant = get_or_create_tenant(db, user_id)
+        # Do not fulfill another tenant's order via forged payload.
+        if order and caller_tenant and order.tenant_id != caller_tenant.id:
+            return None
+    if not order and caller_tenant:
         order = db.scalar(
             select(Order)
-            .where(Order.tenant_id == tenant.id, Order.rail == "stars", Order.status.in_(("pending", "paid")))
+            .where(
+                Order.tenant_id == caller_tenant.id,
+                Order.rail == "stars",
+                Order.status.in_(("pending", "paid")),
+            )
             .order_by(Order.id.desc())
         )
     if not order:
@@ -271,6 +297,9 @@ def fulfill_stars_order(db: Session, *, user_id: int = 0, payload: str = "", cha
         return db.get(Tenant, order.tenant_id)
     if charge_id:
         order.telegram_charge_id = charge_id
+    # Require Telegram payment signal (charge id) before activating.
+    if not order.telegram_charge_id:
+        return None
     if order.status == "pending":
         add_event(db, order, "paid", "stars_paid")
     tenant = activate_order(db, order)
