@@ -1,0 +1,42 @@
+y_text(f'电报查不到 @{name}\n{exc}\n改用 /bind {name} 电报ID')
+                return
+        tenant = db.scalar(select(Tenant).where(Tenant.owner_tg_id == tg_id))
+        if not tenant:
+            ident = db.scalar(select(Identity).where(Identity.official_user_id == tg_id))
+            tenant = db.get(Tenant, ident.tenant_id) if ident else None
+        if not tenant:
+            await update.effective_message.reply_text(f'库里没有 TG {tg_id} 的开通记录。先发 /paid 看列表。')
+            return
+        ident = tenant.identity or Identity(tenant_id=tenant.id)
+        ident.username = name
+        ident.official_user_id = ident.official_user_id or tg_id
+        if not ident.display_name:
+            ident.display_name = name
+        db.add(ident)
+        add_admin_audit(
+            db,
+            update.effective_user.id,
+            "user_bind",
+            target_type="tenant",
+            target_id=str(tenant.id),
+            detail=f"tg_id={tenant.owner_tg_id};username={name}",
+        )
+        db.commit()
+        await update.effective_message.reply_text(
+            f'已补登记 @{name}\nTG {tenant.owner_tg_id}\n开通至 {fmt_until(tenant.paid_until) or "-"}'
+        )
+    finally:
+        db.close()
+
+
+async def _admin_cb(query, context, data: str, db) -> bool:
+    if not data.startswith('adm:') and data != 'admin':
+        return False
+    if not _is_admin(query.from_user.id):
+        await query.message.reply_text('仅管理员可用。')
+        return True
+    if data in {'admin', 'adm:home', 'adm:prices'}:
+        await _show_admin(query.message, db)
+        return True
+    if data == 'adm:price':
+        await query.message.reply_text('选择要改价的套餐', reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton('一年', callback_data='adm:pk:year')],[InlineKeyboardButton('返回后台', callback_data='a

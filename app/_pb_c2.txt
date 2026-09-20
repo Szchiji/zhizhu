@@ -1,0 +1,43 @@
+  lines.extend([f'{o.public_code}  {float(o.amount):g}U  {o.status}' for o in pending] or ['暂无待确认 USDT 订单'])
+    await message.reply_text('\n'.join(lines), reply_markup=_kb_admin(db))
+
+
+async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    context.user_data.pop('wait', None)
+    db = get_session()
+    try:
+        user = update.effective_user
+        if await deny_message(update.effective_message, user.id):
+            return
+        tenant = get_or_create_tenant(db, user.id)
+        payload = (context.args[0] if context.args else '').strip()
+        if payload.startswith('q') and parse_username(payload[1:]):
+            await _send_lookup(update.effective_message, db, parse_username(payload[1:]), _bot(context), bot=context.bot, user=user)
+            return
+        ident = save_paid_profile(db, tenant, user) if tenant_usable(tenant) else tenant.identity
+        text, kb = render_start(db, tenant, ident, bot=_bot(context), admin=_is_admin(user.id))
+        if payload in {'q', 'ask'}:
+            context.user_data['wait'] = 'lookup'
+            text += '\n\n直接发送要查询的 @用户名。'
+        await update.effective_message.reply_text(text, reply_markup=kb)
+    finally:
+        db.close()
+
+
+async def cmd_status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    context.args = []
+    await cmd_start(update, context)
+
+
+async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if await deny_message(update.effective_message, update.effective_user.id):
+        return
+    db = get_session()
+    try:
+        await update.effective_message.reply_text(render_help(db, bot=_bot(context)))
+    finally:
+        db.close()
+
+
+async def cmd_admin(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+ 

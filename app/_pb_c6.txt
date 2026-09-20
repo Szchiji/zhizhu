@@ -1,0 +1,38 @@
+adm:') and await deny_message(query.message, query.from_user.id):
+            return
+        tenant = get_or_create_tenant(db, query.from_user.id)
+        if await _admin_cb(query, context, data, db):
+            return
+        if data == 'status':
+            context.args = []
+            await cmd_start(update, context)
+            return
+        if data == 'ask_lookup':
+            context.user_data['wait'] = 'lookup'
+            await query.message.reply_text('请发送要查询的用户名，例如 @username')
+            return
+        if data == 'home:help':
+            await query.message.reply_text(render_help(db, bot=_bot(context)))
+            return
+        if data.startswith('stars:'):
+            await _pay_stars(query.from_user.id, query.message, context, tenant, db, data.split(':', 1)[1])
+        elif data.startswith('usdt:'):
+            await _pay_usdt(query.message, tenant, db, data.split(':', 1)[1])
+    finally:
+        db.close()
+
+
+async def _pay_stars(chat_id, message, context, tenant: Tenant, db, key: str) -> None:
+    if key not in PLANS:
+        key = 'year'
+    if open_order(db, tenant.id):
+        await message.reply_text('已有待支付订单。')
+        return
+    price = plan_stars(db, key)
+    payload = f'stars:{key}:{tenant.id}:{new_code()}'
+    db.add(Order(public_code=new_code(), tenant_id=tenant.id, rail='stars', plan=key, period_days=PLANS[key]['days'], amount=price, currency='XTR', status='pending', payload=payload, expires_at=utcnow() + timedelta(hours=24)))
+    db.commit()
+    await context.bot.send_invoice(chat_id=chat_id, title=f"{brand_name()}·{PLANS[key]['label']}", description='开通后可保存平台登记资料', payload=payload, provider_token='', currency='XTR', prices=[LabeledPrice(PLANS[key]['label'], price)])
+
+
+async def _pay_usdt(message, tenant: Tenant, db, 

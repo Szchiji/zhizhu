@@ -1,0 +1,49 @@
+.total_amount:
+            await q.answer(ok=False, error_message='订单无效')
+            return
+        await q.answer(ok=True)
+    finally:
+        db.close()
+
+
+async def on_successful_payment(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    pay = update.message.successful_payment
+    db = get_session()
+    try:
+        order = db.scalar(select(Order).where(Order.payload == pay.invoice_payload))
+        if not order:
+            await update.message.reply_text('付款已到，订单未找到')
+            return
+        if order.telegram_charge_id:
+            await update.message.reply_text('这笔已开通')
+            return
+        order.telegram_charge_id = pay.telegram_payment_charge_id
+        add_event(db, order, 'paid', 'stars_successful_payment')
+        tenant = activate_order(db, order)
+        save_paid_profile(db, tenant, update.effective_user)
+        await update.message.reply_text(f"已开通{PLANS.get(order.plan, {}).get('label', '')}至 {fmt_until(tenant.paid_until)}")
+    finally:
+        db.close()
+
+
+async def _handle_admin_text(update, context, text: str) -> bool:
+    wait = context.user_data.get('wait') or ''
+    if not wait.startswith('admin_'):
+        return False
+    if not _is_admin(update.effective_user.id):
+        context.user_data.pop('wait', None)
+        return False
+    db = get_session()
+    try:
+        if wait == 'admin_addr':
+            addr = text.split()[0]
+            if not addr.startswith('T') or len(addr) < 30:
+                await update.effective_message.reply_text('请发送 TRC20 地址')
+                return True
+            set_setting(db, 'usdt_address', addr)
+            add_admin_audit(
+                db,
+                update.effective_user.id,
+                "addr",
+                target_type="setting",
+              
