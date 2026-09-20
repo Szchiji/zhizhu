@@ -10,6 +10,7 @@ from app.brand import brand_name, bot_username
 from app.config import PUBLIC_BASE_URL, WEBHOOK_BASE_URL
 from app.db import get_session
 from app.services import parse_username, resolve_paid_identity
+from app.card_tpl import parse_mode_for
 from app.verify import PARSE_MODE, card_kb, card_text, issuer_kb, issuer_text, is_platform_bot, promo_text
 
 log = logging.getLogger("zhizhu.inline")
@@ -74,33 +75,37 @@ async def on_inline(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     name = parse_username(raw) or raw.lstrip("@").split()[0] if raw else ""
     title = f"查询 @{name}" if name else f"{brand}·平台登记"
     desc = "点击发送登记卡" if name else "输入用户名查询"
-    body = promo_text(bot_name, name)
     markup = card_kb(username=name, bot_username=bot_name)
-    if name and is_platform_bot(name, context.bot.username or bot_name):
-        title = f"🛡️ {brand} 平台出具方"
-        desc = "本账号为平台登记机器人"
-        body = issuer_text(bot_name)
-        markup = issuer_kb(bot_name)
-    else:
-        db = get_session()
-        try:
-            ident = await resolve_paid_identity(db, name, context.bot) if name else None
-            if ident:
-                name = ident.username or name
-                title = f"✅ @{name} 平台登记"
-                desc = f"{ident.display_name or ''} · ID {ident.official_user_id or '—'}".strip(" ·")
-                body = card_text(ident, bot_username=bot_name)
-                markup = card_kb(ident, bot_username=bot_name)
-        except Exception:
-            log.exception("inline resolve")
-        finally:
-            db.close()
+    body = ""
+    mode = PARSE_MODE
+    db = get_session()
+    try:
+        mode = parse_mode_for(db) or PARSE_MODE
+        if name and is_platform_bot(name, context.bot.username or bot_name):
+            title = f"🛡️ {brand} 平台出具方"
+            desc = "本账号为平台登记机器人"
+            body = issuer_text(bot_name, db=db)
+            markup = issuer_kb(bot_name)
+        else:
+            body = promo_text(bot_name, name, db=db)
+            try:
+                ident = await resolve_paid_identity(db, name, context.bot) if name else None
+                if ident:
+                    name = ident.username or name
+                    title = f"✅ @{name} 平台登记"
+                    desc = f"{ident.display_name or ''} · ID {ident.official_user_id or '—'}".strip(" ·")
+                    body = card_text(ident, bot_username=bot_name, db=db)
+                    markup = card_kb(ident, bot_username=bot_name)
+            except Exception:
+                log.exception("inline resolve")
+    finally:
+        db.close()
     item = _article(
         thumb,
         id=(q.id or "r1")[:64],
         title=title,
         description=desc,
-        input_message_content=InputTextMessageContent(body, parse_mode=PARSE_MODE),
+        input_message_content=InputTextMessageContent(body, parse_mode=mode),
         reply_markup=markup,
     )
     try:
