@@ -1,7 +1,8 @@
 # VerifyHub
 
-Telegram 身份核验平台：小程序为主，机器人为辅。
-充值后自动登记资料，群里 `@机器人 + 用户名` 出官方卡。
+Telegram 平台身份登记与查询：小程序为主，机器人为辅。
+充值后自动登记资料，群里 `@机器人 + 用户名` 出登记卡。
+登记由本平台出具并可撤销，以机器人实时查询为准（非政府/第三方「官方」背书）。
 
 仓库：https://github.com/Szchiji/zhizhu
 
@@ -60,3 +61,4 @@ USDT_CONFIRM_CODE_WINDOW=60
 - 用户列表 / 订单列表要搜才出
 - 首页文案保存后重新 `/start`
 - `POST /api/usdt/confirm` 必须配置 `USDT_CONFIRM_SECRET`；确认尝试写入应用日志，已知订单额外写入 `order_events`
+- 管理端改价 / 确认订单 / 补登记 / 拉黑等写入 `admin_audits`（who / what / when / target）
