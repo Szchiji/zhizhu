@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import html
 import json
 import re
 
@@ -55,8 +54,7 @@ PACK_BODIES = {
         "issuer": "🛡️ {品牌} 出具方\n@{机器人}\n\n本账号出具官方登记卡，不是个人登记\n▍ 查个人：@{机器人} + 用户名",
     },
     "pass": {
-        "paid": "🛡️ {品牌}\n官方身份登记\n\
-姓名\t{姓名}\n账号\t{账号}\n编号\t{ID}\n\n{正文}\n▍ 以 @{机器人} 实时查询为准",
+        "paid": "🛡️ {品牌}\n官方身份登记\n\n姓名\t{姓名}\n账号\t{账号}\n编号\t{ID}\n\n{正文}\n▍ 以 @{机器人} 实时查询为准",
         "unpaid": "🛡️ {品牌}\n未找到官方登记\n\n查询对象\t{查询词}\n" + FOOT,
         "issuer": "🛡️ {品牌}\n平台出具方\n\n账号\t@{机器人}\n性质\t核验机器人\n▍ 查个人：@{机器人} + 用户名",
     },
@@ -73,21 +71,22 @@ def load_tpl(db) -> dict:
         return data
     from app.services import get_setting
     raw = get_setting(db, "card_tpl", "")
-    if not raw:
-        return data
-    try:
-        extra = json.loads(raw)
-    except Exception:
-        return data
-    if not isinstance(extra, dict):
-        return data
+    extra = {}
+    if raw:
+        try:
+            parsed = json.loads(raw)
+            if isinstance(parsed, dict):
+                extra = parsed
+        except Exception:
+            extra = {}
     if extra.get("pack") in PACKS:
         data["pack"] = extra["pack"]
     if extra.get("parse") in {"html", "plain"}:
         data["parse"] = extra["parse"]
     for key in KEYS:
-        if isinstance(extra.get(key), str) and extra[key].strip():
-            data[key] = extra[key][:2500]
+        piece = get_setting(db, f"card_tpl_{key}", "") or extra.get(key) or ""
+        if isinstance(piece, str) and piece.strip():
+            data[key] = piece[:2500]
     return data
 
 
@@ -104,8 +103,12 @@ def save_tpl(db, body: dict) -> dict:
         data["parse"] = "plain" if str(body.get("parse") or "plain") != "html" else "html"
         for key in KEYS:
             if isinstance(body.get(key), str):
-                data[key] = body[key][:2500] or DEFAULTS[key]
-    set_setting(db, "card_tpl", json.dumps(data, ensure_ascii=False))
+                data[key] = (body[key] or "").strip()[:2500] or DEFAULTS[key]
+    blob = json.dumps(data, ensure_ascii=False)
+    set_setting(db, "card_tpl", blob)
+    for key in KEYS:
+        set_setting(db, f"card_tpl_{key}", data[key])
+    set_setting(db, "card_tpl_rev", str(int(__import__("time").time())))
     return data
 
 
