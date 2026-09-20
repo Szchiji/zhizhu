@@ -18,7 +18,7 @@ from app.inline_query import on_inline
 from app.models import Identity, Order, Tenant, utcnow
 from app.plans import PLANS, clone_on, plan_stars, plan_usdt, price_board, set_clone
 from app.services import activate_order, add_admin_audit, add_event, find_paid_by_tg_id, fmt_until, get_or_create_tenant, get_setting, new_code, open_order, parse_username, resolve_paid_identity, save_paid_profile, set_setting, tenant_usable, unique_usdt_amount
-from app.verify import card_kb, card_text, promo_text, share_url
+from app.verify import PARSE_MODE, card_kb, card_text, promo_text, share_url
 
 TOKEN_RE = __import__('re').compile(r'^\d{6,}:[A-Za-z0-9_-]{20,}$')
 
@@ -42,3 +42,4 @@ def _mini() -> str:
 
 def _kb_admin(db) -> InlineKeyboardMarkup:
     clone = '克隆：开' if clone_on(db) else '克隆：关'
+    return InlineKeyboardMarkup([
