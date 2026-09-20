@@ -33,6 +33,9 @@ TOKEN_ENC_KEY=随机串
 USDT_CONFIRM_SECRET=随机串
 ```
 
+`POST /api/usdt/confirm` is rate-limited (IP + order code). Limits are **in-memory per process** by default. Set `REDIS_URL` to share the same counters across replicas; if Redis is unreachable at startup the app falls back to in-memory and logs a warning.
+
+
 可选：`BRAND_NAME` `BRAND_TITLE` `不填则用机器人 getMe 名字`。
 
 4. `域名/healthz` 返回 `{"ok":true}`

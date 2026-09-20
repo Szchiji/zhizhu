@@ -36,6 +36,7 @@ USDT_CONFIRM_IP_LIMIT = int(os.getenv("USDT_CONFIRM_IP_LIMIT", "20"))
 USDT_CONFIRM_IP_WINDOW = int(os.getenv("USDT_CONFIRM_IP_WINDOW", "60"))
 USDT_CONFIRM_CODE_LIMIT = int(os.getenv("USDT_CONFIRM_CODE_LIMIT", "10"))
 USDT_CONFIRM_CODE_WINDOW = int(os.getenv("USDT_CONFIRM_CODE_WINDOW", "60"))
+REDIS_URL = os.getenv("REDIS_URL", "").strip()  # optional; shared USDT confirm limits
 
 TRIAL_DAYS = int(os.getenv("TRIAL_DAYS", "0"))
 PLAN_DEFAULT = os.getenv("PLAN_DEFAULT", "year")
