@@ -19,7 +19,7 @@ from app.services import activate_order, add_event, fmt_until, get_setting, save
 log = logging.getLogger("zhizhu.usdt")
 USDT_CONTRACT = "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t"
 TRONGRID = "https://api.trongrid.io/v1/accounts/{addr}/transactions/trc20"
-DEFAULT_REMIND = "你的官方核验将于 {until} 到期，请及时续费。"
+DEFAULT_REMIND = "你的平台登记将于 {until} 到期，请及时续费。"
 
 
 def _api_key() -> str:
