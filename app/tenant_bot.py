@@ -4,7 +4,7 @@ from telegram import InlineQueryResultArticle, InputTextMessageContent, Update
 
 from app.models import Identity, Tenant
 from app.services import tenant_usable
-from app.verify import alert_text, card_kb, card_text, extract_forward, is_forwarded, judge
+from app.verify import PARSE_MODE, alert_text, card_kb, card_text, extract_forward, is_forwarded, judge
 
 
 async def handle_tenant_update(update: Update, tenant: Tenant, bot) -> None:
@@ -33,7 +33,8 @@ async def handle_tenant_update(update: Update, tenant: Tenant, bot) -> None:
                     title=f"{ident.display_name or '官方身份'} · 核验卡",
                     description="发送官方身份卡",
                     input_message_content=InputTextMessageContent(
-                        card_text(ident, watermark=watermark, bot_username=bot_username)
+                        card_text(ident, watermark=watermark, bot_username=bot_username),
+                        parse_mode=PARSE_MODE,
                     ),
                     reply_markup=card_kb(ident, bot_username=bot_username),
                 )
@@ -66,4 +67,5 @@ async def handle_tenant_update(update: Update, tenant: Tenant, bot) -> None:
     await msg.reply_text(
         card_text(ident, watermark=watermark, bot_username=bot_username),
         reply_markup=card_kb(ident, bot_username=bot_username),
+        parse_mode=PARSE_MODE,
     )
