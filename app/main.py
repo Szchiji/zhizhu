@@ -390,8 +390,8 @@ async def mini_order(request: Request):
             r = await client.post(
                 f"https://api.telegram.org/bot{PLATFORM_BOT_TOKEN}/createInvoiceLink",
                 json={
-                    "title": f"官方核验·{PLANS[key]['label']}",
-                    "description": "开通后可保存官方资料",
+                    "title": f"平台登记·{PLANS[key]['label']}",
+                    "description": "开通后可保存平台登记资料",
                     "payload": payload,
                     "provider_token": "",
                     "currency": "XTR",

@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.brand import bot_aliases, bot_username
 from app.config import ADMIN_TG_IDS, PLAN_DEFAULT, STARS_MONTHLY, USDT_YEARLY
-from app.models import Identity, Order, OrderEvent, Setting, Tenant, utcnow
+from app.models import AdminAudit, Identity, Order, OrderEvent, Setting, Tenant, utcnow
 
 USER_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_]{3,31}$")
 SKIP_NAMES = {"https", "http", "www", "telegram", "start", "join"}
@@ -42,7 +42,7 @@ def get_or_create_tenant(db: Session, owner_tg_id: int) -> Tenant:
         tenant = Tenant(owner_tg_id=owner_tg_id, status="unpaid", plan=PLAN_DEFAULT)
     db.add(tenant)
     db.flush()
-    db.add(Identity(tenant_id=tenant.id, alert_text="此为官方登记账号", official_user_id=owner_tg_id))
+    db.add(Identity(tenant_id=tenant.id, alert_text="此为平台登记身份", official_user_id=owner_tg_id))
     db.commit()
     db.refresh(tenant)
     return tenant
@@ -150,7 +150,7 @@ async def resolve_paid_identity(db: Session, username: str, bot=None):
 def save_paid_profile(db: Session, tenant: Tenant, user=None) -> Identity:
     ident = db.scalar(select(Identity).where(Identity.tenant_id == tenant.id))
     if not ident:
-        ident = Identity(tenant_id=tenant.id, alert_text="此为官方登记账号")
+        ident = Identity(tenant_id=tenant.id, alert_text="此为平台登记身份")
         db.add(ident)
     uid = getattr(user, "id", None) if user is not None else None
     if not uid:
@@ -229,6 +229,27 @@ def unique_usdt_amount(db: Session, base: float) -> float:
     while round(amount + extra / 100.0, 2) in used and extra < 99:
         extra += 1
     return round(amount + extra / 100.0, 2)
+
+
+def add_admin_audit(
+    db: Session,
+    admin_tg_id: int,
+    action: str,
+    *,
+    target_type: str = "",
+    target_id: str = "",
+    detail: str = "",
+) -> None:
+    """Durable admin mini-action trail (who / what / when / target). Does not commit."""
+    db.add(
+        AdminAudit(
+            admin_tg_id=int(admin_tg_id or 0),
+            action=(action or "")[:40],
+            target_type=(target_type or "")[:32] or None,
+            target_id=str(target_id or "")[:64] or None,
+            detail=(detail or "")[:2000] or None,
+        )
+    )
 
 
 def add_event(db: Session, order: Order, dest: str, reason: str) -> None:

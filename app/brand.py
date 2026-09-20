@@ -5,7 +5,7 @@ import re
 
 from app.config import BOT_USERNAME, BRAND_NAME, BRAND_TITLE, MENU_TEXT
 
-_LEGACY = {"", "蜘蛛", "蜘蛛核验", "zhizhusp_bot", "官方核验"}
+_LEGACY = {"", "蜘蛛", "蜘蛛核验", "zhizhusp_bot", "官方核验", "平台登记"}
 _NAME_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_]{3,32}$")
 
 _state = {
@@ -59,11 +59,11 @@ def brand_name() -> str:
     env = (os.getenv("BRAND_NAME") or BRAND_NAME or "").strip()
     if env and env not in _LEGACY:
         return env
-    return "官方核验"
+    return "平台登记"
 
 
 def brand_title() -> str:
-    return _state["title"] or "官方身份核验"
+    return _state["title"] or "平台身份登记"
 
 
 def bot_username() -> str:

@@ -144,7 +144,7 @@ async def cmd_paid(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             lines.append(f'#{tenant.id}  TG {tenant.owner_tg_id}  {uname}  至 {fmt_until(tenant.paid_until) or "-"}')
         if len(lines) == 1:
             lines.append('暂无')
-        lines.append('\n补登记：/bind Q_7ge')
+        lines.append('\n补登记：/bind 用户名')
         await update.effective_message.reply_text('\n'.join(lines))
     finally:
         db.close()
@@ -271,7 +271,7 @@ async def _pay_stars(chat_id, message, context, tenant: Tenant, db, key: str) ->
     payload = f'stars:{key}:{tenant.id}:{new_code()}'
     db.add(Order(public_code=new_code(), tenant_id=tenant.id, rail='stars', plan=key, period_days=PLANS[key]['days'], amount=price, currency='XTR', status='pending', payload=payload, expires_at=utcnow() + timedelta(hours=24)))
     db.commit()
-    await context.bot.send_invoice(chat_id=chat_id, title=f"{brand_name()}·{PLANS[key]['label']}", description='开通后可保存官方资料', payload=payload, provider_token='', currency='XTR', prices=[LabeledPrice(PLANS[key]['label'], price)])
+    await context.bot.send_invoice(chat_id=chat_id, title=f"{brand_name()}·{PLANS[key]['label']}", description='开通后可保存平台登记资料', payload=payload, provider_token='', currency='XTR', prices=[LabeledPrice(PLANS[key]['label'], price)])
 
 
 async def _pay_usdt(message, tenant: Tenant, db, key: str) -> None:

@@ -64,7 +64,7 @@ const j=await fetch('/api/mini/lookup?q='+encodeURIComponent(q)+'&user_id='+(use
 const box=document.getElementById('qcard'); if(j.error){show(err,j.error);return;} box.classList.remove('hidden');
 let html='';
 if(j.matches&&j.matches.length) html+='<div class="olist">'+j.matches.map(u=>'<div onclick="document.getElementById(\'q\').value=\'@'+u.username+'\';lookup()">@'+u.username+' · '+(u.display_name||'')+'</div>').join('')+'</div>';
-html+='<div class="idcard">'+(j.found?j.card:('@'+(j.query||q)+' 暂无官方登记'))+'</div>';
+html+='<div class="idcard">'+(j.found?j.card:('@'+(j.query||q)+' 暂无平台登记'))+'</div>';
 document.getElementById('qtext').innerHTML=html;
 }catch(e){show(err,e.message);}
 }

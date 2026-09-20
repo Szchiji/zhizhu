@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover" />
-<title>官方核验</title>
+<title>平台登记</title>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <style>
 :root{--bg:#07090d;--card:#10141c;--line:rgba(212,175,55,.14);--text:#f3efe4;--muted:#8b8373;--gold:#d4af37;--gold2:#f1d48a}
@@ -39,10 +39,10 @@ textarea{min-height:88px}label{display:block;margin-top:12px;color:var(--muted);
 .stat{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px}.stat b{display:block;font-size:15px;margin-top:4px}
 </style></head><body>
 <div class="wrap">
-<div class="top"><div class="av" id="av">?</div><div><div class="hello">Official Desk</div><div class="name" id="uname">加载中…</div></div></div>
+<div class="top"><div class="av" id="av">?</div><div><div class="hello">Platform Desk</div><div class="name" id="uname">加载中…</div></div></div>
 <div id="err" class="err"></div><div id="ok" class="ok"></div>
 <section id="tab-pay">
-<div class="card"><div class="kicker">Membership</div><h1>官方身份核验</h1><p class="sub">开通后自动生成登记卡。</p>
+<div class="card"><div class="kicker">Membership</div><h1>平台身份登记</h1><p class="sub">开通后自动生成登记卡。登记由本平台出具，可撤销，以实时查询为准。</p>
 <div class="price">{{ stars }}⭐ <span>或 {{ usdt }} USDT / 年</span></div>
 <div class="btns"><button onclick="pay(this,'stars')">Stars</button><button class="usdt" onclick="pay(this,'usdt')">USDT</button></div></div>
 <div id="checkout" class="card hidden"><div class="kicker">Checkout</div><h1>待支付</h1>
@@ -77,7 +77,7 @@ textarea{min-height:88px}label{display:block;margin-top:12px;color:var(--muted);
 <div class="card"><div class="kicker">Template</div><h1>卡片模板</h1>
 <p class="sub">占位符 {品牌} {机器人} {姓名} {账号} {ID} {正文} {查询词}</p>
 <div class="btns">
-<button class="ghost" type="button" onclick="cardPack('official')">官方</button>
+<button class="ghost" type="button" onclick="cardPack('official')">标准</button>
 <button class="ghost" type="button" onclick="cardPack('brief')">简报</button>
 <button class="ghost" type="button" onclick="cardPack('pass')">证件</button>
 </div>
@@ -110,5 +110,5 @@ textarea{min-height:88px}label{display:block;margin-top:12px;color:var(--muted);
 <button id="n3" onclick="tab('me')">我的</button>
 <button id="n4" class="hidden" onclick="tab('adm')">管理</button>
 </div>
-<script src="/mini.js?v=7"></script>
+<script src="/mini.js?v=8"></script>
 </body></html>

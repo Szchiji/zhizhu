@@ -8,6 +8,7 @@ from fastapi.responses import FileResponse, JSONResponse, Response
 from app.card_tpl import apply_pack, load_tpl, save_tpl
 from app.config import ADMIN_TG_IDS
 from app.db import get_session
+from app.services import add_admin_audit
 from app.tg_webapp import require_webapp_user
 
 JS_PATH = Path(__file__).resolve().parent / "templates" / "mini.js"
@@ -40,14 +41,19 @@ def mount_card_admin(app) -> None:
     @app.post("/api/mini/admin/card")
     async def save_card(request: Request):
         body = await request.json()
-        if not _admin(body):
+        admin = _admin(body)
+        if not admin:
             return JSONResponse({"error": "仅管理员"}, status_code=403)
         db = get_session()
         try:
             if body.get("apply_pack") or body.get("action") == "pack":
-                data = apply_pack(db, str(body.get("pack") or "official"))
+                pack = str(body.get("pack") or "official")
+                data = apply_pack(db, pack)
+                add_admin_audit(db, admin, "card_pack", target_type="card_tpl", target_id=pack, detail="apply_pack")
             else:
                 data = save_tpl(db, body)
+                add_admin_audit(db, admin, "card_save", target_type="card_tpl", target_id=str(data.get("pack") or ""), detail="save_tpl")
+            db.commit()
             return {"ok": True, "card_tpl": data}
         finally:
             db.close()
