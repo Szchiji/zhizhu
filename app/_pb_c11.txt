@@ -1,0 +1,40 @@
+隆未开启')
+            return
+        if not tenant_usable(tenant):
+            await update.effective_message.reply_text('请先开通再绑定 Token')
+            return
+        async with httpx.AsyncClient(timeout=20) as client:
+            data = (await client.get(f'https://api.telegram.org/bot{text}/getMe')).json()
+        if not data.get('ok'):
+            await update.effective_message.reply_text('Token 无效')
+            return
+        me = data['result']
+        tenant.bot_id = me['id']
+        tenant.bot_username = me.get('username')
+        tenant.bot_token_enc = encrypt_token(text)
+        db.commit()
+        await update.effective_message.reply_text(f"已克隆 @{tenant.bot_username}")
+    finally:
+        db.close()
+
+
+async def cmd_admin_alias(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    await cmd_admin(update, context)
+
+
+def build_platform_app(token: str) -> Application:
+    app = Application.builder().token(token).updater(None).build()
+    for name, fn in [
+        ('start', cmd_start), ('status', cmd_status), ('help', cmd_help), ('admin', cmd_admin),
+        ('paid', cmd_paid), ('bind', cmd_bind),
+        ('confirm', cmd_admin_alias), ('prices', cmd_admin_alias), ('setprice', cmd_admin_alias),
+        ('setaddr', cmd_admin_alias), ('clone', cmd_admin_alias),
+    ]:
+        app.add_handler(CommandHandler(name, fn))
+    app.add_handler(InlineQueryHandler(on_inline))
+    app.add_handler(CallbackQueryHandler(on_callback))
+    app.add_handler(PreCheckoutQueryHandler(on_precheckout))
+    app.add_handler(MessageHandler(filters.StatusUpdate.WEB_APP_DATA, on_webapp))
+    app.add_handler(MessageHandler(filters.SUCCESSFUL_PAYMENT, on_successful_payment))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, on_text))
+    return app

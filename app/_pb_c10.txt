@@ -1,0 +1,49 @@
+               target_type="order",
+                target_id=order.public_code,
+                detail=f"tenant={tenant.id};txid={order.txid or ''}",
+            )
+            db.commit()
+            context.user_data.pop('wait', None)
+            await update.effective_message.reply_text(f'{order.public_code} 已开通至 {fmt_until(tenant.paid_until)}', reply_markup=_kb_admin(db))
+            return True
+        return False
+    finally:
+        db.close()
+
+
+async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if update.message and update.message.web_app_data:
+        await on_webapp(update, context)
+        return
+    if await deny_message(update.effective_message, update.effective_user.id):
+        return
+    text = (update.message.text or '').strip()
+    if await _handle_admin_text(update, context, text):
+        return
+    if TOKEN_RE.match(text):
+        await on_token(update, context)
+        return
+    name = parse_username(text)
+    if not name:
+        if context.user_data.get('wait') == 'lookup':
+            await update.effective_message.reply_text('请发送用户名，例如 @username')
+        return
+    context.user_data.pop('wait', None)
+    db = get_session()
+    try:
+        await _send_lookup(update.effective_message, db, name, _bot(context), bot=context.bot, user=update.effective_user)
+    finally:
+        db.close()
+
+
+async def on_token(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    text = (update.message.text or '').strip()
+    db = get_session()
+    try:
+        tenant = get_or_create_tenant(db, update.effective_user.id)
+        try:
+            await update.message.delete()
+        except Exception:
+            pass
+        if not clone_on(db):
+            await update.effective_message.reply_text('克

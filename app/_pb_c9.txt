@@ -1,0 +1,44 @@
+  target_id="usdt_address",
+                detail=addr[:16] + "…",
+            )
+            db.commit()
+            context.user_data.pop('wait', None)
+            await update.effective_message.reply_text(f'收款地址已更新\n{addr}', reply_markup=_kb_admin(db))
+            return True
+        if wait.startswith('admin_price:'):
+            _, key, rail = wait.split(':')
+            try:
+                value = float(text.replace(',', ''))
+            except ValueError:
+                await update.effective_message.reply_text('请只发数字')
+                return True
+            setting_key = f"{'stars' if rail=='stars' else 'usdt'}_{key}"
+            stored = str(int(value) if rail=='stars' else f'{value:g}')
+            set_setting(db, setting_key, stored)
+            add_admin_audit(
+                db,
+                update.effective_user.id,
+                "price",
+                target_type="setting",
+                target_id=setting_key,
+                detail=f"amount={stored}",
+            )
+            db.commit()
+            context.user_data.pop('wait', None)
+            await update.effective_message.reply_text(price_board(db), reply_markup=_kb_admin(db))
+            return True
+        if wait == 'admin_confirm':
+            parts = text.split()
+            order = db.scalar(select(Order).where(Order.public_code == parts[0].upper()))
+            if not order:
+                await update.effective_message.reply_text('订单不存在')
+                return True
+            if len(parts) > 1:
+                order.txid = parts[1]
+            add_event(db, order, 'paid', 'manual_confirm')
+            tenant = activate_order(db, order)
+            add_admin_audit(
+                db,
+                update.effective_user.id,
+                "confirm",
+ 
