@@ -30,8 +30,8 @@ async def handle_tenant_update(update: Update, tenant: Tenant, bot) -> None:
             [
                 InlineQueryResultArticle(
                     id="official",
-                    title=f"{ident.display_name or '官方身份'} · 核验卡",
-                    description="发送官方身份卡",
+                    title=f"{ident.display_name or '平台登记'} · 登记卡",
+                    description="发送平台登记卡",
                     input_message_content=InputTextMessageContent(
                         card_text(ident, watermark=watermark, bot_username=bot_username),
                         parse_mode=PARSE_MODE,

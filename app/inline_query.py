@@ -60,16 +60,16 @@ async def on_inline(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             log.exception("inline deny")
         return
     bot_name = (bot_username() or context.bot.username or "bot").lstrip("@")
-    brand = brand_name() or "官方核验"
+    brand = brand_name() or "平台登记"
     raw = (q.query or "").strip()
     name = parse_username(raw) or raw.lstrip("@").split()[0] if raw else ""
-    title = f"查询 @{name}" if name else f"{brand}·官方核验"
-    desc = "点击发送官方卡" if name else "输入用户名查询"
+    title = f"查询 @{name}" if name else f"{brand}·平台登记"
+    desc = "点击发送登记卡" if name else "输入用户名查询"
     body = promo_text(bot_name, name)
     markup = card_kb(username=name, bot_username=bot_name)
     if name and is_platform_bot(name, context.bot.username or bot_name):
-        title = f"🛡️ {brand} 官方出具方"
-        desc = "本账号为核验机器人"
+        title = f"🛡️ {brand} 平台出具方"
+        desc = "本账号为平台登记机器人"
         body = issuer_text(bot_name)
         markup = issuer_kb(bot_name)
     else:
@@ -78,7 +78,7 @@ async def on_inline(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             ident = await resolve_paid_identity(db, name, context.bot) if name else None
             if ident:
                 name = ident.username or name
-                title = f"✅ @{name} 官方登记"
+                title = f"✅ @{name} 平台登记"
                 desc = f"{ident.display_name or ''} · ID {ident.official_user_id or '—'}".strip(" ·")
                 body = card_text(ident, bot_username=bot_name)
                 markup = card_kb(ident, bot_username=bot_name)
