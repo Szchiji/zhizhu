@@ -71,16 +71,22 @@ def parse_username(text: str) -> str:
     for alias in list(skip):
         if alias in SKIP_NAMES:
             continue
-        raw = re.sub(rf"^@?{re.escape(alias)}\\b(?:\\s*\\+\\s*|\\s+)", "", raw, flags=re.I).strip()
-    for name in re.findall(r"@([A-Za-z][A-Za-z0-9_]{3,31})", text or ""):
+        # Drop leading @alias or "@alias +" before the target username
+        raw = re.sub(
+            "^@?" + re.escape(alias) + "(?: *" + re.escape("+") + " *| +)",
+            "",
+            raw,
+            flags=re.I,
+        ).strip()
+    for name in re.findall("@([A-Za-z][A-Za-z0-9_]{3,31})", text or ""):
         if name.lower() not in skip:
             return name
-    if re.search(r"https?://|t\\.me/", raw, re.I):
+    if re.search("https?://|t[.]me/", raw, re.I):
         return ""
     for prefix in ("核验", "查询", "verify"):
         if raw.lower().startswith(prefix):
             raw = raw[len(prefix):].strip()
-    token = re.split(r"[\\s/?=&]+", raw)[0] if raw else ""
+    token = re.split("[ /?=&]+", raw)[0] if raw else ""
     token = token.lstrip("@")
     if not USER_RE.fullmatch(token) or token.lower() in skip:
         return ""
