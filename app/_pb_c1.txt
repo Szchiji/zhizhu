@@ -1,5 +1,3 @@
-
-    return InlineKeyboardMarkup([
         [InlineKeyboardButton('当前价格', callback_data='adm:prices')],
         [InlineKeyboardButton('修改价格', callback_data='adm:price')],
         [InlineKeyboardButton('修改收款地址', callback_data='adm:addr')],
@@ -25,15 +23,13 @@ async def _send_lookup(message, db, name: str, bot_name: str, bot=None, user=Non
             db.commit()
             ident = mine
     if not ident:
-        await message.reply_text(promo_text(bot_name, name), reply_markup=card_kb(username=name, bot_username=bot_name))
+        await message.reply_text(promo_text(bot_name, name, db=db), reply_markup=card_kb(username=name, bot_username=bot_name), parse_mode=PARSE_MODE)
         return
     tenant = db.get(Tenant, ident.tenant_id)
     url = share_url(bot_name, tenant.id) if tenant else ''
-    await message.reply_text(card_text(ident, bot_username=bot_name), reply_markup=card_kb(ident, share_url=url, bot_username=bot_name))
+    await message.reply_text(card_text(ident, bot_username=bot_name, db=db), reply_markup=card_kb(ident, share_url=url, bot_username=bot_name), parse_mode=PARSE_MODE)
 
 
 async def _show_admin(message, db) -> None:
     addr = _pay_address(db) or '未设'
     pending = list(db.scalars(select(Order).where(Order.rail == 'usdt', Order.status.in_(('pending', 'confirming'))).order_by(Order.id.desc()).limit(8)))
-    lines = [f'管理后台\n\n{price_board(db)}', f'收款地址：{addr}', '', '待确认订单（订单号即 VH- 开头）']
-  
