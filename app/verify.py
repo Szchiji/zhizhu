@@ -41,6 +41,16 @@ def issuer_kb(bot_username: str = "") -> InlineKeyboardMarkup:
 
 def card_text(ident: Identity, *, watermark: bool = False, bot_username: str = "") -> str:
     extra = (ident.card_text or "").strip()
+    until = "—"
+    tenant = getattr(ident, "tenant", None)
+    if tenant is not None:
+        from app.services import fmt_until, is_staff, tenant_usable
+        if getattr(tenant, "paid_until", None):
+            until = fmt_until(tenant.paid_until) or "—"
+        elif getattr(tenant, "status", "") == "owner" or is_staff(getattr(tenant, "owner_tg_id", 0)):
+            until = "管理员"
+        elif tenant_usable(tenant):
+            until = "有效"
     return render_tpl(
         "paid",
         {
@@ -49,6 +59,7 @@ def card_text(ident: Identity, *, watermark: bool = False, bot_username: str = "
             "账号": f"@{ident.username}" if ident.username else "未绑定",
             "ID": ident.official_user_id or "—",
             "正文": extra,
+            "有效期": until,
         },
     )
 
