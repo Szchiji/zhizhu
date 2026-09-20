@@ -1,8 +1,3 @@
-adm:') and await deny_message(query.message, query.from_user.id):
-            return
-        tenant = get_or_create_tenant(db, query.from_user.id)
-        if await _admin_cb(query, context, data, db):
-            return
         if data == 'status':
             context.args = []
             await cmd_start(update, context)
@@ -35,4 +30,14 @@ async def _pay_stars(chat_id, message, context, tenant: Tenant, db, key: str) ->
     await context.bot.send_invoice(chat_id=chat_id, title=f"{brand_name()}·{PLANS[key]['label']}", description='开通后可保存平台登记资料', payload=payload, provider_token='', currency='XTR', prices=[LabeledPrice(PLANS[key]['label'], price)])
 
 
-async def _pay_usdt(message, tenant: Tenant, db, 
+async def _pay_usdt(message, tenant: Tenant, db, key: str) -> None:
+    if key not in PLANS:
+        key = 'year'
+    addr = _pay_address(db)
+    if not addr:
+        await message.reply_text('尚未配置 USDT 地址')
+        return
+    if open_order(db, tenant.id):
+        await message.reply_text('已有待支付订单。')
+        return
+    code = new_code()

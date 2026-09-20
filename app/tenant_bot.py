@@ -4,6 +4,8 @@ from telegram import InlineQueryResultArticle, InputTextMessageContent, Update
 
 from app.models import Identity, Tenant
 from app.services import tenant_usable
+from app.card_tpl import parse_mode_for
+from app.db import get_session
 from app.verify import PARSE_MODE, alert_text, card_kb, card_text, extract_forward, is_forwarded, judge
 
 
@@ -23,6 +25,12 @@ async def handle_tenant_update(update: Update, tenant: Tenant, bot) -> None:
     watermark = tenant.status == "trial"
     me = await bot.get_me()
     bot_username = me.username or ""
+    db = get_session()
+    try:
+        mode = parse_mode_for(db) or PARSE_MODE
+        card_body = card_text(ident, watermark=watermark, bot_username=bot_username, db=db)
+    finally:
+        db.close()
 
     if update.inline_query:
         q = update.inline_query
@@ -33,13 +41,13 @@ async def handle_tenant_update(update: Update, tenant: Tenant, bot) -> None:
                     title=f"{ident.display_name or '平台登记'} · 登记卡",
                     description="发送平台登记卡",
                     input_message_content=InputTextMessageContent(
-                        card_text(ident, watermark=watermark, bot_username=bot_username),
-                        parse_mode=PARSE_MODE,
+                        card_body,
+                        parse_mode=mode,
                     ),
                     reply_markup=card_kb(ident, bot_username=bot_username),
                 )
             ],
-            cache_time=10,
+            cache_time=0,
             is_personal=True,
         )
         return
@@ -65,7 +73,7 @@ async def handle_tenant_update(update: Update, tenant: Tenant, bot) -> None:
         return
 
     await msg.reply_text(
-        card_text(ident, watermark=watermark, bot_username=bot_username),
+        card_body,
         reply_markup=card_kb(ident, bot_username=bot_username),
-        parse_mode=PARSE_MODE,
+        parse_mode=mode,
     )

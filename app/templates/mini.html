@@ -17,6 +17,7 @@
 .card{background:var(--card);border:1px solid var(--line);border-radius:22px;padding:18px;margin-bottom:12px}
 .kicker{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--gold);margin-bottom:8px}
 h1{font-size:22px;margin:0 0 6px;font-weight:680}
+h2.sec{font-size:15px;margin:0 0 10px;font-weight:650;color:var(--gold2)}
 .sub{color:var(--muted);font-size:13px;line-height:1.65}
 .price{font-size:30px;font-weight:740;margin:14px 0 2px}
 .price span{font-size:14px;color:var(--muted);font-weight:500}
@@ -24,12 +25,14 @@ h1{font-size:22px;margin:0 0 6px;font-weight:680}
 button{flex:1;border:0;border-radius:14px;padding:13px 10px;font-size:14px;font-weight:700;color:#1a1406;background:linear-gradient(180deg,var(--gold2),var(--gold))}
 button.ghost{background:#171c26;color:var(--text);border:1px solid var(--line)}
 button.usdt{background:#143528;color:#d9ffe8}
+button:disabled{opacity:.45}
 input,textarea,select{width:100%;border:1px solid var(--line);background:#0b0e14;color:var(--text);border-radius:14px;padding:13px 12px;font-size:15px;margin-top:8px}
-textarea{min-height:88px}label{display:block;margin-top:12px;color:var(--muted);font-size:12px}
+textarea{min-height:88px;line-height:1.55;font-family:ui-monospace,Menlo,monospace;font-size:13px}
+label{display:block;margin-top:12px;color:var(--muted);font-size:12px}
 .err,.ok{display:none;border-radius:14px;padding:11px 12px;font-size:13px;margin-bottom:12px}
 .err{background:#2a1518;color:#ffc4c8}.ok{background:#10261c;color:#c6f6d8}
 .mono{word-break:break-all;font-family:ui-monospace,Menlo,monospace;background:#0b0e14;padding:12px;border-radius:12px;border:1px solid var(--line);font-size:13px}
-.nav{position:fixed;left:12px;right:12px;bottom:14px;display:flex;gap:6px;background:rgba(12,16,24,.92);border:1px solid var(--line);border-radius:20px;padding:6px}
+.nav{position:fixed;left:12px;right:12px;bottom:14px;display:flex;gap:6px;background:rgba(12,16,24,.92);border:1px solid var(--line);border-radius:20px;padding:6px;z-index:20}
 .nav button{background:transparent;color:var(--muted);font-size:12px;padding:11px 6px}
 .nav button.on{background:#1a2110;color:var(--gold2)}
 .hidden{display:none}.pill{display:inline-flex;font-size:11px;padding:5px 9px;border-radius:999px;background:#1a2110;color:var(--gold2)}
@@ -37,6 +40,14 @@ textarea{min-height:88px}label{display:block;margin-top:12px;color:var(--muted);
 .idcard{white-space:pre-wrap;line-height:1.75;font-size:14px}
 .olist{font-size:13px;color:var(--muted)}.olist div{padding:10px 0;border-bottom:1px solid var(--line)}.olist b{color:var(--text)}
 .stat{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px}.stat b{display:block;font-size:15px;margin-top:4px}
+.adm-nav{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px}
+.adm-nav button{flex:0 0 auto;padding:8px 12px;font-size:12px;border-radius:999px;background:#171c26;color:var(--muted);border:1px solid var(--line)}
+.adm-nav button.on{background:#1a2110;color:var(--gold2);border-color:rgba(212,175,55,.35)}
+.adm-sec{display:none}.adm-sec.on{display:block}
+.tgbar{display:flex;flex-wrap:wrap;gap:4px;margin-top:8px}
+.tgbar button{flex:0 0 auto;padding:7px 9px;font-size:12px;border-radius:10px;background:#171c26;color:var(--gold2);border:1px solid var(--line);font-weight:650;min-width:34px}
+.hint{font-size:11px;color:var(--muted);margin-top:6px;line-height:1.5}
+.divider{height:1px;background:var(--line);margin:14px 0}
 </style></head><body>
 <div class="wrap">
 <div class="top"><div class="av" id="av">?</div><div><div class="hello">Platform Desk</div><div class="name" id="uname">加载中…</div></div></div>
@@ -59,34 +70,76 @@ textarea{min-height:88px}label{display:block;margin-top:12px;color:var(--muted);
 <div class="card"><div class="kicker">Ledger</div><h1>订单记录</h1><div class="olist" id="olist">暂无</div></div>
 </section>
 <section id="tab-adm" class="hidden">
-<div class="card"><div class="kicker">Home</div><h1>首页设置</h1>
+<div class="card" style="padding-bottom:10px">
+<div class="kicker">Admin</div><h1>管理后台</h1>
+<p class="sub" id="aboard"></p>
+<div class="adm-nav" id="admnav">
+<button type="button" class="on" data-sec="price" onclick="admSec('price')">定价/收款</button>
+<button type="button" data-sec="card" onclick="admSec('card')">卡片模板</button>
+<button type="button" data-sec="home" onclick="admSec('home')">首页文案</button>
+<button type="button" data-sec="users" onclick="admSec('users')">用户</button>
+<button type="button" data-sec="orders" onclick="admSec('orders')">订单</button>
+<button type="button" data-sec="channel" onclick="admSec('channel')">频道订阅</button>
+</div>
+</div>
+
+<div class="adm-sec on" id="asec-price">
+<div class="card"><h2 class="sec">定价 / 收款</h2>
+<label>Stars 年付</label><input id="astars" type="number" /><label>USDT 年付</label><input id="ausdt" type="number" />
+<div class="btns"><button onclick="setPrice('stars')">改 Stars</button><button class="usdt" onclick="setPrice('usdt')">改 USDT</button></div>
+<label>收款地址（TRC20）</label><input id="aaddr" />
+<div class="btns"><button class="ghost" onclick="setAddr()">保存地址</button><button class="ghost" onclick="toggleClone()" id="aclone">克隆</button></div>
+<div class="divider"></div>
+<h2 class="sec">续费提醒</h2>
+<label>提前天数</label><input id="rdays" type="number" value="7" /><label>提醒文案</label><textarea id="rtext"></textarea>
+<div class="btns"><button class="ghost" onclick="saveRemind()">保存提醒</button><button class="ghost" id="renable" onclick="toggleRemind()">提醒：开</button></div>
+</div>
+</div>
+
+<div class="adm-sec" id="asec-card">
+<div class="card"><h2 class="sec">卡片模板</h2>
+<p class="sub">占位符：{品牌} {机器人} {姓名} {账号} {ID} {正文} {查询词} {有效期}。静态文案可用 Telegram HTML：b/i/u/s/code/pre/a；用户字段会自动转义。</p>
+<div class="btns">
+<button class="ghost" type="button" onclick="cardPack('official')">标准包</button>
+<button class="ghost" type="button" onclick="cardPack('brief')">简报包</button>
+<button class="ghost" type="button" onclick="cardPack('pass')">证件包</button>
+</div>
+<label>已登记卡</label>
+<div class="tgbar" data-for="ctpaid"></div>
+<textarea id="ctpaid" maxlength="2500"></textarea>
+<label>未登记卡</label>
+<div class="tgbar" data-for="ctunpaid"></div>
+<textarea id="ctunpaid" maxlength="2500"></textarea>
+<label>出具方卡</label>
+<div class="tgbar" data-for="ctissuer"></div>
+<textarea id="ctissuer" maxlength="2500"></textarea>
+<p class="hint">工具栏只插入 Telegram 允许的标签。保存后请重新查询一张卡核对；旧消息不会自动换文案。</p>
+<div class="btns"><button id="btnsavecard" onclick="saveCardTpl()" disabled>保存模板</button></div>
+</div>
+</div>
+
+<div class="adm-sec" id="asec-home">
+<div class="card"><h2 class="sec">首页文案</h2>
 <label>标题（可空，空则用机器人名）</label><input id="htitle" maxlength="40" />
-<label>未开通介绍</label><textarea id="hbody0" maxlength="500"></textarea>
-<label>已开通介绍</label><textarea id="hbody1" maxlength="500"></textarea>
-<label>使用说明</label><textarea id="hhelp" maxlength="800"></textarea>
+<label>未开通介绍</label>
+<div class="tgbar" data-for="hbody0"></div>
+<textarea id="hbody0" maxlength="500"></textarea>
+<label>已开通介绍</label>
+<div class="tgbar" data-for="hbody1"></div>
+<textarea id="hbody1" maxlength="500"></textarea>
+<label>使用说明</label>
+<div class="tgbar" data-for="hhelp"></div>
+<textarea id="hhelp" maxlength="800"></textarea>
 <label>按钮1</label><input id="hb1" /><select id="ha1"><option value="mini">打开小程序</option><option value="lookup">机器人查询</option><option value="help">发送说明</option></select>
 <label>按钮2</label><input id="hb2" /><select id="ha2"><option value="mini">打开小程序</option><option value="lookup">机器人查询</option><option value="help">发送说明</option></select>
 <label>按钮3</label><input id="hb3" /><select id="ha3"><option value="mini">打开小程序</option><option value="lookup">机器人查询</option><option value="help">发送说明</option></select>
-<p class="sub">占位符：{品牌} {机器人} {到期} {账号} {姓名}</p>
-<div class="btns"><button onclick="saveHome()">保存首页</button></div></div>
-<div class="card"><div class="kicker">Admin</div><h1>经营设置</h1><p class="sub" id="aboard"></p>
-<label>Stars 年付</label><input id="astars" type="number" /><label>USDT 年付</label><input id="ausdt" type="number" />
-<div class="btns"><button onclick="setPrice('stars')">改 Stars</button><button class="usdt" onclick="setPrice('usdt')">改 USDT</button></div>
-<label>收款地址</label><input id="aaddr" /><div class="btns"><button class="ghost" onclick="setAddr()">保存地址</button><button class="ghost" onclick="toggleClone()" id="aclone">克隆</button></div></div>
-<div class="card"><h1>续费提醒</h1><label>提前天数</label><input id="rdays" type="number" value="7" /><label>提醒文案</label><textarea id="rtext"></textarea><div class="btns"><button class="ghost" onclick="saveRemind()">保存</button><button class="ghost" id="renable" onclick="toggleRemind()">提醒：开</button></div></div>
-<div class="card"><div class="kicker">Template</div><h1>卡片模板</h1>
-<p class="sub">占位符 {品牌} {机器人} {姓名} {账号} {ID} {正文} {查询词}</p>
-<div class="btns">
-<button class="ghost" type="button" onclick="cardPack('official')">标准</button>
-<button class="ghost" type="button" onclick="cardPack('brief')">简报</button>
-<button class="ghost" type="button" onclick="cardPack('pass')">证件</button>
+<p class="hint">占位符：{品牌} {机器人} {到期} {账号} {姓名}</p>
+<div class="btns"><button onclick="saveHome()">保存首页</button></div>
 </div>
-<label>已登记卡</label><textarea id="ctpaid" maxlength="2500"></textarea>
-<label>未登记卡</label><textarea id="ctunpaid" maxlength="2500"></textarea>
-<label>出具方卡</label><textarea id="ctissuer" maxlength="2500"></textarea>
-<div class="btns"><button onclick="saveCardTpl()">保存模板</button></div></div>
-<div class="card"><h1>强制订阅</h1><label>频道</label><input id="achannel" placeholder="@channel 或 -100ID" /><div class="btns"><button class="ghost" onclick="saveChannel()">保存频道</button><button class="ghost" id="achon" onclick="toggleChannel()">强制订阅：关</button></div></div>
-<div class="card"><h1>用户 / 补登记</h1>
+</div>
+
+<div class="adm-sec" id="asec-users">
+<div class="card"><h2 class="sec">用户 / 补登记</h2>
 <input id="uq" placeholder="@用户名 或 电报ID" />
 <div class="btns"><button onclick="searchUsers()">搜索用户</button></div>
 <div class="olist" id="ulist">输入条件后点搜索</div>
@@ -94,15 +147,29 @@ textarea{min-height:88px}label{display:block;margin-top:12px;color:var(--muted);
 <label>用户名</label><input id="auname" placeholder="username" />
 <label>姓名</label><input id="aname" placeholder="对外姓名" />
 <label>开通天数</label><input id="adays" type="number" value="365" />
-<div class="btns"><button onclick="bindUser()">补登记</button><button class="ghost" onclick="addUser()">添加并开通</button></div></div>
-<div class="card"><h1>确认订单</h1>
+<div class="btns"><button onclick="bindUser()">补登记</button><button class="ghost" onclick="addUser()">添加并开通</button></div>
+</div>
+</div>
+
+<div class="adm-sec" id="asec-orders">
+<div class="card"><h2 class="sec">确认订单</h2>
 <input id="oq" placeholder="订单号或TG ID，点搜索才显示" />
 <div class="btns"><button onclick="searchOrders()">搜索订单</button></div>
 <div class="olist" id="apend"></div>
 <div class="olist" id="aorders">输入条件后点搜索</div>
 <label>订单号</label><input id="acode" placeholder="VH-XXXXXX" />
 <label>交易哈希（可空）</label><input id="atxid" />
-<div class="btns"><button onclick="confirmOrder()">确认开通</button></div></div>
+<div class="btns"><button onclick="confirmOrder()">确认开通</button></div>
+</div>
+</div>
+
+<div class="adm-sec" id="asec-channel">
+<div class="card"><h2 class="sec">频道强制订阅</h2>
+<label>频道</label><input id="achannel" placeholder="@channel 或 -100ID" />
+<div class="btns"><button class="ghost" onclick="saveChannel()">保存频道</button><button class="ghost" id="achon" onclick="toggleChannel()">强制订阅：关</button></div>
+</div>
+</div>
+
 </section></div>
 <div class="nav">
 <button class="on" id="n1" onclick="tab('pay')">开通</button>
@@ -110,5 +177,5 @@ textarea{min-height:88px}label{display:block;margin-top:12px;color:var(--muted);
 <button id="n3" onclick="tab('me')">我的</button>
 <button id="n4" class="hidden" onclick="tab('adm')">管理</button>
 </div>
-<script src="/mini.js?v=8"></script>
+<script src="/mini.js?v=9"></script>
 </body></html>

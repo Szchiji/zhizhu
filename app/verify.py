@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
-from app.brand import bot_aliases, brand_name, bot_username
-from app.card_tpl import render as render_tpl
+from app.brand import brand_name, bot_username
+from app.card_tpl import parse_mode_for, render as render_tpl
 from app.models import Identity
 
 BADGE = "🛡️"
@@ -15,6 +15,8 @@ def _bot(name: str = "") -> str:
 
 
 def is_platform_bot(query: str, bot_name: str = "") -> bool:
+    from app.brand import bot_aliases
+
     q = (query or "").strip().lstrip("@").split()[0].lower()
     if not q:
         return False
@@ -25,8 +27,8 @@ def is_platform_bot(query: str, bot_name: str = "") -> bool:
     return q in names
 
 
-def issuer_text(bot_username: str = "") -> str:
-    return render_tpl("issuer", {"机器人": _bot(bot_username)})
+def issuer_text(bot_username: str = "", db=None) -> str:
+    return render_tpl("issuer", {"机器人": _bot(bot_username)}, db=db)
 
 
 def issuer_kb(bot_username: str = "") -> InlineKeyboardMarkup:
@@ -39,12 +41,14 @@ def issuer_kb(bot_username: str = "") -> InlineKeyboardMarkup:
     )
 
 
-def card_text(ident: Identity, *, watermark: bool = False, bot_username: str = "") -> str:
+def card_text(ident: Identity, *, watermark: bool = False, bot_username: str = "", db=None) -> str:
+    del watermark  # reserved
     extra = (ident.card_text or "").strip()
     until = "—"
     tenant = getattr(ident, "tenant", None)
     if tenant is not None:
         from app.services import fmt_until, is_staff, tenant_usable
+
         if getattr(tenant, "paid_until", None):
             until = fmt_until(tenant.paid_until) or "—"
         elif getattr(tenant, "status", "") == "owner" or is_staff(getattr(tenant, "owner_tg_id", 0)):
@@ -61,12 +65,13 @@ def card_text(ident: Identity, *, watermark: bool = False, bot_username: str = "
             "正文": extra,
             "有效期": until,
         },
+        db=db,
     )
 
 
-def promo_text(bot_name: str = "", name: str = "") -> str:
+def promo_text(bot_name: str = "", name: str = "", db=None) -> str:
     if name and is_platform_bot(name, bot_name):
-        return issuer_text(bot_name)
+        return issuer_text(bot_name, db=db)
     query = f"@{name.lstrip('@')}" if name else ""
     return render_tpl(
         "unpaid",
@@ -74,6 +79,7 @@ def promo_text(bot_name: str = "", name: str = "") -> str:
             "机器人": _bot(bot_name),
             "查询词": query or "该账号",
         },
+        db=db,
     )
 
 
@@ -91,9 +97,10 @@ def card_kb(ident: Identity | None = None, *, share_url: str = "", bot_username:
     return InlineKeyboardMarkup(rows)
 
 
-async def send_card(message, ident: Identity, *, bot=None, bot_username: str = "", share: str = "") -> None:
-    text = card_text(ident, bot_username=bot_username)
+async def send_card(message, ident: Identity, *, bot=None, bot_username: str = "", share: str = "", db=None) -> None:
+    text = card_text(ident, bot_username=bot_username, db=db)
     kb = card_kb(ident, share_url=share, bot_username=bot_username)
+    mode = parse_mode_for(db) or PARSE_MODE
     if bot and ident.official_user_id:
         try:
             photos = await bot.get_user_profile_photos(ident.official_user_id, limit=1)
@@ -102,12 +109,12 @@ async def send_card(message, ident: Identity, *, bot=None, bot_username: str = "
                     photos.photos[0][-1].file_id,
                     caption=text[:1024],
                     reply_markup=kb,
-                    parse_mode=PARSE_MODE,
+                    parse_mode=mode,
                 )
                 return
         except Exception:
             pass
-    await message.reply_text(text, reply_markup=kb, parse_mode=PARSE_MODE)
+    await message.reply_text(text, reply_markup=kb, parse_mode=mode)
 
 
 def alert_text(ident: Identity) -> str:

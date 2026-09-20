@@ -2,6 +2,7 @@ const tg=window.Telegram.WebApp;tg.ready();tg.expand();
 const user=(tg.initDataUnsafe&&tg.initDataUnsafe.user)||null;
 const initData=tg.initData||'';
 const err=document.getElementById('err'),ok=document.getElementById('ok');
+let _cardLoaded=false;
 function show(el,msg){
   const text=String(msg||'');
   const title=(el===err)?'操作失败':'已完成';
@@ -19,6 +20,10 @@ function tab(name){
 ['pay','q','me','adm'].forEach(n=>document.getElementById('tab-'+n).classList.toggle('hidden',n!==name));
 ['pay','q','me','adm'].forEach((n,i)=>document.getElementById('n'+(i+1)).classList.toggle('on',n===name));
 if(name==='me'){loadMe();loadOrders();} if(name==='adm'){loadAdmin();}
+}
+function admSec(name){
+  document.querySelectorAll('.adm-sec').forEach(el=>el.classList.toggle('on',el.id==='asec-'+name));
+  document.querySelectorAll('#admnav button').forEach(btn=>btn.classList.toggle('on',btn.getAttribute('data-sec')===name));
 }
 if(user){
 document.getElementById('uname').textContent=user.first_name+(user.last_name?(' '+user.last_name):'');
@@ -63,9 +68,11 @@ try{
 const j=await fetch('/api/mini/lookup?q='+encodeURIComponent(q)+'&user_id='+(user&&user.id||'')+'&init_data='+encodeURIComponent(initData)).then(r=>r.json());
 const box=document.getElementById('qcard'); if(j.error){show(err,j.error);return;} box.classList.remove('hidden');
 let html='';
-if(j.matches&&j.matches.length) html+='<div class="olist">'+j.matches.map(u=>'<div onclick="document.getElementById(\'q\').value=\'@'+u.username+'\';lookup()">@'+u.username+' · '+(u.display_name||'')+'</div>').join('')+'</div>';
-html+='<div class="idcard">'+(j.found?j.card:('@'+(j.query||q)+' 暂无平台登记'))+'</div>';
+if(j.matches&&j.matches.length){html+='<div class="olist">'+j.matches.map(u=>'<div class="pick" data-q="@'+u.username+'">@'+u.username+' · '+(u.display_name||'')+'</div>').join('')+'</div>';}
+const body=j.found?(j.card||''):(j.card||('@'+(j.query||q)+' 暂无平台登记'));
+html+='<div class="idcard"></div>';
 document.getElementById('qtext').innerHTML=html;
+document.getElementById('qtext').querySelector('.idcard').textContent=body;document.getElementById('qtext').querySelectorAll('.pick').forEach(el=>{el.onclick=()=>{document.getElementById('q').value=el.getAttribute('data-q');lookup();};});
 }catch(e){show(err,e.message);}
 }
 async function loadMe(){
@@ -93,7 +100,7 @@ try{
 const j=await fetch('/api/mini/admin/users?q='+encodeURIComponent(q)+'&user_id='+(user&&user.id||'')+'&init_data='+encodeURIComponent(initData)).then(r=>r.json());
 if(j.error){show(err,j.error);return;} const el=document.getElementById('ulist');
 if(!j.users||!j.users.length){el.textContent='未找到';return;}
-el.innerHTML=j.users.map(u=>'<div>@'+(u.username||'无用户名')+' · '+(u.display_name||'')+' · ID '+u.tg_id+' · '+u.status+' · '+(u.paid_until||'')+'<br><button class="ghost" style="margin-top:6px" onclick="fillBind('+u.tg_id+',\''+(u.username||'')+'\',\''+(u.display_name||'')+'\')">补登记</button> <button class="ghost" onclick="userAct(\'user_block\','+u.tg_id+')">拉黑</button> <button class="ghost" onclick="userAct(\'user_unblock\','+u.tg_id+')">解除</button> <button class="ghost" onclick="userAct(\'user_delete\','+u.tg_id+')">删除</button></div>').join('');
+el.innerHTML=j.users.map(u=>'<div>@'+(u.username||'无用户名')+' · '+(u.display_name||'')+' · ID '+u.tg_id+' · '+u.status+' · '+(u.paid_until||'')+'<br><button class="ghost fillb" style="margin-top:6px" data-tg="'+u.tg_id+'" data-un="'+(u.username||'')+'" data-dn="'+(u.display_name||'')+'">补登记</button>'+' <button class="ghost" data-act="user_block" data-tg="'+u.tg_id+'">拉黑</button>'+' <button class="ghost" data-act="user_unblock" data-tg="'+u.tg_id+'">解除</button>'+' <button class="ghost" data-act="user_delete" data-tg="'+u.tg_id+'">删除</button></div>').join('');el.querySelectorAll('.fillb').forEach(b=>b.onclick=()=>fillBind(b.getAttribute('data-tg'),b.getAttribute('data-un'),b.getAttribute('data-dn')));el.querySelectorAll('[data-act]').forEach(b=>b.onclick=()=>userAct(b.getAttribute('data-act'),b.getAttribute('data-tg')));
 }catch(e){show(err,e.message);}
 }
 function fillBind(tg,uname,dname){document.getElementById('atgid').value=tg||'';document.getElementById('auname').value=uname||'';document.getElementById('aname').value=dname||'';}
@@ -109,13 +116,14 @@ document.getElementById('astars').value=j.stars||''; document.getElementById('au
 document.getElementById('aclone').textContent=j.clone?'克隆：开':'克隆：关';
 document.getElementById('rdays').value=j.remind_days||7; document.getElementById('rtext').value=j.remind_text||'';
 window._remind=j.remind_enabled!=='0'; document.getElementById('renable').textContent=window._remind?'提醒：开':'提醒：关';
-document.getElementById('achannel').value=j.force_channel||''; loadCardTpl(); window._ch=j.force_channel_on==='1'; document.getElementById('achon').textContent=window._ch?'强制订阅：开':'强制订阅：关';
+document.getElementById('achannel').value=j.force_channel||''; window._ch=j.force_channel_on==='1'; document.getElementById('achon').textContent=window._ch?'强制订阅：开':'强制订阅：关';
 const hm=j.home||{}; document.getElementById('htitle').value=hm.title||'';
 document.getElementById('hbody0').value=hm.body_unpaid||''; document.getElementById('hbody1').value=hm.body_paid||'';
 document.getElementById('hhelp').value=hm.help||'';
 const bt=hm.btns||[];
 ['hb1','hb2','hb3'].forEach((id,i)=>{document.getElementById(id).value=(bt[i]&&bt[i].label)||'';});
 ['ha1','ha2','ha3'].forEach((id,i)=>{document.getElementById(id).value=(bt[i]&&bt[i].action)||'mini';});
+await loadCardTpl();
 }catch(e){show(err,e.message);}
 }
 async function setPrice(rail){try{await api('/api/mini/admin',{action:'price',rail:rail,amount:document.getElementById(rail==='stars'?'astars':'ausdt').value});show(ok,'价格已更新');loadAdmin();}catch(e){show(err,e.message);}}
@@ -133,8 +141,8 @@ if(j.error){show(err,j.error);return;}
 const hit=o=>!q||String(o.code||'').toLowerCase().includes(q)||String(o.tg_id||'').includes(q)||String(o.status||'').includes(q)||String(o.rail||'').includes(q);
 const pend=(j.pending||[]).filter(hit);
 const rows=(j.orders||[]).filter(hit);
-document.getElementById('apend').innerHTML=pend.length?pend.map(o=>'<div onclick="document.getElementById(\'acode\').value=\''+o.code+'\'"><b>'+o.code+'</b> · '+o.amount+'U · '+o.status+'</div>').join(''):'';
-document.getElementById('aorders').innerHTML=rows.length?rows.map(o=>'<div onclick="document.getElementById(\'acode\').value=\''+o.code+'\'"><b>'+o.code+'</b> · '+(o.rail||'')+' · '+o.amount+' · '+o.status+(o.tg_id?(' · TG '+o.tg_id):'')+'</div>').join(''):'未找到';
+document.getElementById('apend').innerHTML=pend.length?pend.map(o=>'<div class="ocode" data-c="'+o.code+'"><b>'+o.code+'</b> · '+o.amount+'U · '+o.status+'</div>').join(''):'';document.getElementById('apend').querySelectorAll('.ocode').forEach(el=>el.onclick=()=>{document.getElementById('acode').value=el.getAttribute('data-c');});
+document.getElementById('aorders').innerHTML=rows.length?rows.map(o=>'<div class="ocode" data-c="'+o.code+'"><b>'+o.code+'</b> · '+(o.rail||'')+' · '+o.amount+' · '+o.status+(o.tg_id?(' · TG '+o.tg_id):'')+'</div>').join(''):'未找到';document.getElementById('aorders').querySelectorAll('.ocode').forEach(el=>el.onclick=()=>{document.getElementById('acode').value=el.getAttribute('data-c');});
 }catch(e){show(err,e.message);}
 }
 async function confirmOrder(){try{await api('/api/mini/admin',{action:'confirm',code:document.getElementById('acode').value,txid:document.getElementById('atxid').value});show(ok,'订单已确认');}catch(e){show(err,e.message);}}
@@ -143,29 +151,90 @@ const btns=[1,2,3].map(i=>({label:document.getElementById('hb'+i).value,action:d
 try{await api('/api/mini/admin',{action:'home',title:document.getElementById('htitle').value,body_unpaid:document.getElementById('hbody0').value,body_paid:document.getElementById('hbody1').value,help:document.getElementById('hhelp').value,btns:btns});show(ok,'首页已保存。请回机器人重新发送 /start');}catch(e){show(err,e.message);}}
 async function save(){try{await api('/api/mini/profile',{display_name:document.getElementById('display').value,card_text:document.getElementById('card').value,username:user&&user.username});show(ok,'资料已生效');}catch(e){show(err,e.message);}}
 loadMe();
+
+/* —— Telegram HTML toolbar (b/i/u/s/code/pre/a only) —— */
+const TG_TOOLS=[
+  {label:'B',title:'粗体',wrap:['<b>','</b>']},
+  {label:'I',title:'斜体',wrap:['<i>','</i>']},
+  {label:'U',title:'下划线',wrap:['<u>','</u>']},
+  {label:'S',title:'删除线',wrap:['<s>','</s>']},
+  {label:'<>',title:'行内代码',wrap:['<code>','</code>']},
+  {label:'Pre',title:'代码块',wrap:['<pre>','</pre>']},
+  {label:'Link',title:'链接',link:true},
+];
+function wrapSelection(ta,before,after){
+  const start=ta.selectionStart||0,end=ta.selectionEnd||0;
+  const val=ta.value||'';
+  const selected=val.slice(start,end)||'文本';
+  ta.value=val.slice(0,start)+before+selected+after+val.slice(end);
+  const caret=start+before.length+selected.length+after.length;
+  ta.focus(); ta.setSelectionRange(caret,caret);
+}
+function insertLink(ta){
+  let href='';
+  try{href=window.prompt('链接地址（http/https/tg）','https://')||'';}catch(e){return;}
+  href=String(href).trim();
+  if(!new RegExp('^(https?://|tg://)','i').test(href)){show(err,'仅支持 http/https/tg 链接');return;}
+  wrapSelection(ta,'<a href="'+href+'">','</a>');
+}
+function mountTgBars(){
+  document.querySelectorAll('.tgbar[data-for]').forEach(bar=>{
+    if(bar.dataset.ready) return;
+    const id=bar.getAttribute('data-for');
+    TG_TOOLS.forEach(tool=>{
+      const b=document.createElement('button');
+      b.type='button'; b.textContent=tool.label; b.title=tool.title||tool.label;
+      b.addEventListener('click',()=>{
+        const ta=document.getElementById(id); if(!ta) return;
+        if(tool.link) insertLink(ta); else wrapSelection(ta,tool.wrap[0],tool.wrap[1]);
+      });
+      bar.appendChild(b);
+    });
+    bar.dataset.ready='1';
+  });
+}
+mountTgBars();
+
 async function loadCardTpl(){
-try{
-const j=await fetch('/api/mini/admin/card?user_id='+(user&&user.id||'')+'&init_data='+encodeURIComponent(initData)).then(r=>r.json());
-if(j.error||!j.card_tpl) return;
-const t=j.card_tpl;
-document.getElementById('ctpaid').value=t.paid||'';
-document.getElementById('ctunpaid').value=t.unpaid||'';
-document.getElementById('ctissuer').value=t.issuer||'';
-}catch(e){}
+  const btn=document.getElementById('btnsavecard');
+  if(btn) btn.disabled=true;
+  _cardLoaded=false;
+  try{
+    const j=await fetch('/api/mini/admin/card?user_id='+(user&&user.id||'')+'&init_data='+encodeURIComponent(initData)).then(r=>r.json());
+    if(j.error||!j.card_tpl) return;
+    const t=j.card_tpl;
+    document.getElementById('ctpaid').value=t.paid||'';
+    document.getElementById('ctunpaid').value=t.unpaid||'';
+    document.getElementById('ctissuer').value=t.issuer||'';
+    _cardLoaded=true;
+    if(btn) btn.disabled=false;
+  }catch(e){}
 }
 async function saveCardTpl(){
-try{
-await api('/api/mini/admin/card',{paid:document.getElementById('ctpaid').value,unpaid:document.getElementById('ctunpaid').value,issuer:document.getElementById('ctissuer').value});
-show(ok,'卡片模板已保存。请重新查询一张卡核对，旧卡不会自动换文案');
-}catch(e){show(err,e.message);}
+  if(!_cardLoaded){show(err,'模板尚未加载完成，请稍候再保存');return;}
+  try{
+    const j=await api('/api/mini/admin/card',{
+      parse:'html',
+      paid:document.getElementById('ctpaid').value,
+      unpaid:document.getElementById('ctunpaid').value,
+      issuer:document.getElementById('ctissuer').value
+    });
+    const t=j.card_tpl||{};
+    if(t.paid!=null) document.getElementById('ctpaid').value=t.paid;
+    if(t.unpaid!=null) document.getElementById('ctunpaid').value=t.unpaid;
+    if(t.issuer!=null) document.getElementById('ctissuer').value=t.issuer;
+    show(ok,'卡片模板已保存并生效。请重新查询一张卡核对；旧卡不会自动换文案');
+  }catch(e){show(err,e.message);}
 }
 async function cardPack(pack){
-try{
-const j=await api('/api/mini/admin/card',{apply_pack:true,pack:pack});
-const t=j.card_tpl||{};
-document.getElementById('ctpaid').value=t.paid||'';
-document.getElementById('ctunpaid').value=t.unpaid||'';
-document.getElementById('ctissuer').value=t.issuer||'';
-show(ok,'已套用格式包，请再点保存模板');
-}catch(e){show(err,e.message);}
+  try{
+    const j=await api('/api/mini/admin/card',{apply_pack:true,pack:pack});
+    const t=j.card_tpl||{};
+    document.getElementById('ctpaid').value=t.paid||'';
+    document.getElementById('ctunpaid').value=t.unpaid||'';
+    document.getElementById('ctissuer').value=t.issuer||'';
+    _cardLoaded=true;
+    const btn=document.getElementById('btnsavecard'); if(btn) btn.disabled=false;
+    show(ok,'已套用并保存格式包。可再微调后点「保存模板」');
+  }catch(e){show(err,e.message);}
 }

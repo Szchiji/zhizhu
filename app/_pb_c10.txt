@@ -1,16 +1,3 @@
-               target_type="order",
-                target_id=order.public_code,
-                detail=f"tenant={tenant.id};txid={order.txid or ''}",
-            )
-            db.commit()
-            context.user_data.pop('wait', None)
-            await update.effective_message.reply_text(f'{order.public_code} 已开通至 {fmt_until(tenant.paid_until)}', reply_markup=_kb_admin(db))
-            return True
-        return False
-    finally:
-        db.close()
-
-
 async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if update.message and update.message.web_app_data:
         await on_webapp(update, context)
@@ -46,4 +33,16 @@ async def on_token(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         except Exception:
             pass
         if not clone_on(db):
-            await update.effective_message.reply_text('克
+            await update.effective_message.reply_text('克隆未开启')
+            return
+        if not tenant_usable(tenant):
+            await update.effective_message.reply_text('请先开通再绑定 Token')
+            return
+        async with httpx.AsyncClient(timeout=20) as client:
+            data = (await client.get(f'https://api.telegram.org/bot{text}/getMe')).json()
+        if not data.get('ok'):
+            await update.effective_message.reply_text('Token 无效')
+            return
+        me = data['result']
+        tenant.bot_id = me['id']
+        tenant.bot_username = me.get('username')

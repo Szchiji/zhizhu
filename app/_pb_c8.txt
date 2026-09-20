@@ -1,15 +1,3 @@
-.total_amount:
-            await q.answer(ok=False, error_message='订单无效')
-            return
-        await q.answer(ok=True)
-    finally:
-        db.close()
-
-
-async def on_successful_payment(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    pay = update.message.successful_payment
-    db = get_session()
-    try:
         order = db.scalar(select(Order).where(Order.payload == pay.invoice_payload))
         if not order:
             await update.message.reply_text('付款已到，订单未找到')
@@ -46,4 +34,13 @@ async def _handle_admin_text(update, context, text: str) -> bool:
                 update.effective_user.id,
                 "addr",
                 target_type="setting",
-              
+                target_id="usdt_address",
+                detail=addr[:16] + "…",
+            )
+            db.commit()
+            context.user_data.pop('wait', None)
+            await update.effective_message.reply_text(f'收款地址已更新\n{addr}', reply_markup=_kb_admin(db))
+            return True
+        if wait.startswith('admin_price:'):
+            _, key, rail = wait.split(':')
+            try:
