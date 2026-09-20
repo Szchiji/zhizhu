@@ -8,10 +8,15 @@ from app.brand import brand_name, bot_username
 
 KEYS = ("paid", "unpaid", "issuer")
 PACKS = ("official", "brief", "pass")
+FOOT = (
+    "▍ 谨防仿冒：只认本机器人实时查询结果\n"
+    "▍ 查询：任意输入框输入  @{机器人} + 用户名\n"
+    "▍ 申请官方卡：点下方「开通官方核验」"
+)
 
 DEFAULTS = {
     "pack": "official",
-    "parse": "html",
+    "parse": "plain",
     "paid": (
         "🛡️ {品牌} 官方核验来源：@{机器人}\n"
         "━━━━━━━━━━━━\n"
@@ -20,9 +25,7 @@ DEFAULTS = {
         "ID：{ID}\n"
         "━━━━━━━━━━━━\n"
         "{正文}\n"
-        "<blockquote>谨防仿冒：只认本机器人实时查询结果\n"
-        "查询：任意输入框输入  @{机器人} + 用户名\n"
-        "申请官方卡：点下方「开通官方核验」</blockquote>"
+        + FOOT
     ),
     "unpaid": (
         "🛡️ {品牌} 官方核验来源：@{机器人}\n"
@@ -30,9 +33,7 @@ DEFAULTS = {
         "{查询词} 尚未完成官方登记\n"
         "本机器人暂无该账号的有效资料\n"
         "━━━━━━━━━━━━\n"
-        "<blockquote>谨防仿冒：只认本机器人实时查询结果\n"
-        "查询：任意输入框输入  @{机器人} + 用户名\n"
-        "申请官方卡：点下方「开通官方核验」</blockquote>"
+        + FOOT
     ),
     "issuer": (
         "🛡️ {品牌} 官方出具方\n"
@@ -41,64 +42,25 @@ DEFAULTS = {
         "本账号为平台核验机器人\n"
         "负责出具官方登记卡，不是个人身份登记\n"
         "━━━━━━━━━━━━\n"
-        "<blockquote>查个人请输入：@{机器人} + 对方用户名\n"
-        "申请官方卡：点下方「开通官方核验」</blockquote>"
+        "▍ 查个人请输入：@{机器人} + 对方用户名\n"
+        "▍ 申请官方卡：点下方「开通官方核验」"
     ),
 }
 
 PACK_BODIES = {
     "official": {k: DEFAULTS[k] for k in KEYS},
     "brief": {
-        "paid": (
-            "✅ {品牌} 官方登记\n"
-            "@{机器人}\n\n"
-            "{姓名}\n{账号}\nID {ID}\n\n"
-            "{正文}\n"
-            "<blockquote>查询 @{机器人} + 用户名 · 申请点下方开通</blockquote>"
-        ),
-        "unpaid": (
-            "{品牌} 查询结果\n\n"
-            "{查询词} 尚未登记\n"
-            "暂无有效资料\n"
-            "<blockquote>查询 @{机器人} + 用户名 · 申请点下方开通</blockquote>"
-        ),
-        "issuer": (
-            "🛡️ {品牌} 出具方\n@{机器人}\n\n"
-            "本账号出具官方登记卡，不是个人登记\n"
-            "<blockquote>查个人：@{机器人} + 用户名</blockquote>"
-        ),
+        "paid": "✅ {品牌} 官方登记\n@{机器人}\n\n{姓名}\n{账号}\nID {ID}\n\n{正文}\n" + FOOT,
+        "unpaid": "{品牌} 查询结果\n\n{查询词} 尚未登记\n暂无有效资料\n" + FOOT,
+        "issuer": "🛡️ {品牌} 出具方\n@{机器人}\n\n本账号出具官方登记卡，不是个人登记\n▍ 查个人：@{机器人} + 用户名",
     },
     "pass": {
-        "paid": (
-            "🛡️ {品牌}\n"
-            "官方身份登记\n\n"
-            "姓名\t{姓名}\n"
-            "账号\t{账号}\n"
-            "编号\t{ID}\n\n"
-            "{正文}\n"
-            "<blockquote>以 @{机器人} 实时查询为准</blockquote>"
-        ),
-        "unpaid": (
-            "🛡️ {品牌}\n"
-            "未找到官方登记\n\n"
-            "查询对象\t{查询词}\n"
-            "<blockquote>申请官方卡：点下方开通</blockquote>"
-        ),
-        "issuer": (
-            "🛡️ {品牌}\n"
-            "平台出具方\n\n"
-            "账号\t@{机器人}\n"
-            "性质\t核验机器人\n"
-            "<blockquote>查个人：@{机器人} + 用户名</blockquote>"
-        ),
+        "paid": "🛡️ {品牌}\n官方身份登记\n\
+姓名\t{姓名}\n账号\t{账号}\n编号\t{ID}\n\n{正文}\n▍ 以 @{机器人} 实时查询为准",
+        "unpaid": "🛡️ {品牌}\n未找到官方登记\n\n查询对象\t{查询词}\n" + FOOT,
+        "issuer": "🛡️ {品牌}\n平台出具方\n\n账号\t@{机器人}\n性质\t核验机器人\n▍ 查个人：@{机器人} + 用户名",
     },
 }
-
-_ALLOWED = re.compile(
-    r"</?(?:b|strong|i|em|u|s|code|pre|blockquote)(?:\s+expandable)?\s*>|"
-    r"<a\s+href=\"[^\"]+\">|</a>",
-    re.I,
-)
 
 
 def _plain_defaults() -> dict:
@@ -135,11 +97,11 @@ def save_tpl(db, body: dict) -> dict:
     if pack not in PACKS:
         pack = "official"
     if body.get("apply_pack"):
-        data = {"pack": pack, "parse": "html", **PACK_BODIES[pack]}
+        data = {"pack": pack, "parse": "plain", **PACK_BODIES[pack]}
     else:
         data = load_tpl(db)
         data["pack"] = pack
-        data["parse"] = "html" if str(body.get("parse") or "html") != "plain" else "plain"
+        data["parse"] = "plain" if str(body.get("parse") or "plain") != "html" else "html"
         for key in KEYS:
             if isinstance(body.get(key), str):
                 data[key] = body[key][:2500] or DEFAULTS[key]
@@ -170,25 +132,27 @@ def _ctx(extra: dict | None = None) -> dict:
     return data
 
 
-def _esc(text: str) -> str:
-    return html.escape(text or "", quote=False)
-
-
-def fill(text: str, extra: dict | None = None, *, escape: bool = True) -> str:
-    ctx = _ctx(extra)
+def fill(text: str, extra: dict | None = None) -> str:
     out = text or ""
-    for key, value in ctx.items():
-        token = "{" + key + "}"
+    for key, value in _ctx(extra).items():
         raw = "" if value is None else str(value)
-        out = out.replace(token, _esc(raw) if escape else raw)
-    out = re.sub(r"\n{3,}", "\n\n", out).strip()
-    if escape:
-        # keep only known tags that were in the template, not user values
-        pass
-    return out
+        out = out.replace("{" + key + "}", raw)
+    return re.sub(r"\n{3,}", "\n\n", out).strip()
 
 
 def render(kind: str, extra: dict | None = None, db=None) -> str:
-    tpl = load_tpl(db)
-    body = tpl.get(kind) or DEFAULTS.get(kind) or DEFAULTS["unpaid"]
-    return fill(body, extra, escape=True)
+    close = False
+    if db is None:
+        try:
+            from app.db import get_session
+            db = get_session()
+            close = True
+        except Exception:
+            db = None
+    try:
+        tpl = load_tpl(db)
+        body = tpl.get(kind) or DEFAULTS.get(kind) or DEFAULTS["unpaid"]
+        return fill(body, extra)
+    finally:
+        if close and db is not None:
+            db.close()
