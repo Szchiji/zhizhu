@@ -34,7 +34,7 @@ def issuer_kb(bot_username: str = "") -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         [
             [InlineKeyboardButton("再查一个", switch_inline_query_current_chat="")],
-            [InlineKeyboardButton("开通官方核验", url=f"https://t.me/{bot}?startapp")],
+            [InlineKeyboardButton("开通平台登记", url=f"https://t.me/{bot}?startapp")],
         ]
     )
 
@@ -76,7 +76,7 @@ def card_kb(ident: Identity | None = None, *, share_url: str = "", bot_username:
     if ident and uname:
         rows.append([InlineKeyboardButton("联系他", url=f"https://t.me/{uname}")])
     rows.append([InlineKeyboardButton("再查一个", switch_inline_query_current_chat="")])
-    rows.append([InlineKeyboardButton("开通官方核验", url=f"https://t.me/{bot}?startapp")])
+    rows.append([InlineKeyboardButton("开通平台登记", url=f"https://t.me/{bot}?startapp")])
     return InlineKeyboardMarkup(rows)
 
 
@@ -100,7 +100,7 @@ async def send_card(message, ident: Identity, *, bot=None, bot_username: str = "
 
 
 def alert_text(ident: Identity) -> str:
-    text = ident.alert_text or f"此为{brand_name()}官方登记账号"
+    text = ident.alert_text or f"此为{brand_name()}平台登记身份"
     uid = ident.official_user_id or ""
     uname = f"@{ident.username}" if ident.username else ""
     return f"{text}\n{uname}  {uid}".strip()[:200]
@@ -144,4 +144,4 @@ def judge(ident: Identity, src_id: int | None, src_name: str) -> str:
             f"核验结果：与登记不符\n"
             f"来源：{src_name}\n来源 ID：{src_id}\n登记 ID：{official}"
         )
-    return "无法完成核验：对方尚未登记官方 ID，或转发来源已隐藏。"
+    return "无法完成核验：对方尚未登记平台用户 ID，或转发来源已隐藏。"
