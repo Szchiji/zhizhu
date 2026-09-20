@@ -22,6 +22,10 @@ from app.config import (
     PUBLIC_BASE_URL,
     USDT_ADDRESS,
     USDT_CHAIN,
+    USDT_CONFIRM_CODE_LIMIT,
+    USDT_CONFIRM_CODE_WINDOW,
+    USDT_CONFIRM_IP_LIMIT,
+    USDT_CONFIRM_IP_WINDOW,
     USDT_CONFIRM_SECRET,
     WEBHOOK_BASE_URL,
     WEBHOOK_SECRET,
@@ -32,9 +36,11 @@ from app.entry import deny_json
 from app.models import Identity, Order, Tenant, utcnow
 from app.plans import PLANS, plan_stars, plan_usdt
 from app.platform_bot import build_platform_app
+from app.rate_limit import SlidingWindowLimiter
 from app.services import (
     activate_order,
     add_event,
+    audit_order_event,
     fulfill_stars_order,
     fmt_until,
     get_or_create_tenant,
@@ -56,6 +62,16 @@ logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("zhizhu")
 templates = Jinja2Templates(directory="app/templates")
 platform_app = None
+_usdt_confirm_limiter = SlidingWindowLimiter()
+
+
+def _client_ip(request: Request) -> str:
+    forwarded = (request.headers.get("x-forwarded-for") or "").split(",")[0].strip()
+    if forwarded:
+        return forwarded[:64]
+    if request.client and request.client.host:
+        return request.client.host[:64]
+    return "unknown"
 
 
 def _uid(body: dict | None = None, user_id: int = 0, init_data: str = "") -> int:
@@ -419,7 +435,7 @@ async def mini_stars_paid(request: Request):
             ),
         )
         if not tenant:
-            return JSONResponse({"error": "没有待开通的 Stars 订单"}, status_code=404)
+            return JSONResponse({"error": "等待支付确认或订单不存在"}, status_code=404)
         return {"ok": True, "paid": True, "paid_until": fmt_until(tenant.paid_until)}
     finally:
         db.close()
@@ -477,22 +493,74 @@ async def pay_usdt(request: Request, code: str):
 
 @app.post("/api/usdt/confirm")
 async def usdt_confirm(request: Request):
+    """Manual USDT confirm. Requires shared secret; rate-limited; audited."""
+    client_ip = _client_ip(request)
     body = await request.json()
-    if USDT_CONFIRM_SECRET and body.get("secret") != USDT_CONFIRM_SECRET:
-        raise HTTPException(403, "bad secret")
-    code = str(body.get("code", "")).upper()
+    code = str(body.get("code", "")).upper().strip()
     txid = body.get("txid")
+
+    def _slog(outcome: str, **extra) -> None:
+        bits = " ".join(f"{k}={v}" for k, v in extra.items() if v is not None)
+        log.info("usdt_confirm outcome=%s ip=%s code=%s %s", outcome, client_ip, code or "-", bits)
+
+    if not _usdt_confirm_limiter.allow(
+        f"ip:{client_ip}",
+        limit=USDT_CONFIRM_IP_LIMIT,
+        window_sec=USDT_CONFIRM_IP_WINDOW,
+    ):
+        _slog("rate_limited_ip")
+        raise HTTPException(429, "rate limited")
+
+    # Fail closed: empty secret must not allow anonymous confirms.
+    if not USDT_CONFIRM_SECRET:
+        _slog("secret_not_configured")
+        raise HTTPException(503, "confirm secret not configured")
+    if body.get("secret") != USDT_CONFIRM_SECRET:
+        _slog("bad_secret")
+        raise HTTPException(403, "bad secret")
+
     db = get_session()
     try:
-        order = db.scalar(select(Order).where(Order.public_code == code))
+        order = db.scalar(select(Order).where(Order.public_code == code)) if code else None
+
+        if code and not _usdt_confirm_limiter.allow(
+            f"code:{code}",
+            limit=USDT_CONFIRM_CODE_LIMIT,
+            window_sec=USDT_CONFIRM_CODE_WINDOW,
+        ):
+            if order:
+                audit_order_event(db, order, "confirm_rate_limited")
+                db.commit()
+            _slog("rate_limited_code", order_id=order.id if order else None)
+            raise HTTPException(429, "rate limited")
+
         if not order:
+            _slog("unknown_order")
             raise HTTPException(404, "order not found")
+
+        if order.rail != "usdt":
+            audit_order_event(db, order, "confirm_denied_wrong_rail")
+            db.commit()
+            _slog("wrong_rail", order_id=order.id, rail=order.rail)
+            raise HTTPException(400, "not a usdt order")
+
         if order.status == "active":
+            audit_order_event(db, order, "confirm_idempotent")
+            db.commit()
+            _slog("already_active", order_id=order.id)
             return {"ok": True, "already": True}
+
+        if order.status not in {"pending", "confirming", "paid", "draft"}:
+            audit_order_event(db, order, "confirm_denied_bad_status")
+            db.commit()
+            _slog("bad_status", order_id=order.id, status=order.status)
+            raise HTTPException(400, f"order status {order.status} not confirmable")
+
         if txid:
-            order.txid = txid
+            order.txid = str(txid)[:128]
         add_event(db, order, "paid", "api_confirm")
         tenant = activate_order(db, order)
+        _slog("ok", order_id=order.id, tenant_id=tenant.id)
         return {"ok": True, "paid_until": str(tenant.paid_until)}
     finally:
         db.close()
