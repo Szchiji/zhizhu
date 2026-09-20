@@ -3,9 +3,11 @@ from __future__ import annotations
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
 from app.brand import bot_aliases, brand_name, bot_username
+from app.card_tpl import render as render_tpl
 from app.models import Identity
 
 BADGE = "🛡️"
+PARSE_MODE = "HTML"
 
 
 def _bot(name: str = "") -> str:
@@ -24,20 +26,7 @@ def is_platform_bot(query: str, bot_name: str = "") -> bool:
 
 
 def issuer_text(bot_username: str = "") -> str:
-    bot = _bot(bot_username)
-    brand = brand_name()
-    return "\n".join(
-        [
-            f"{BADGE} {brand} 官方出具方",
-            f"来源：@{bot}",
-            "━━━━━━━━━━━━",
-            "本账号为平台核验机器人",
-            "负责出具官方登记卡，不是个人身份登记",
-            "━━━━━━━━━━━━",
-            f"查个人请输入：@{bot} + 对方用户名",
-            "自己要官方卡：点下方「开通官方核验」",
-        ]
-    )
+    return render_tpl("issuer", {"机器人": _bot(bot_username)})
 
 
 def issuer_kb(bot_username: str = "") -> InlineKeyboardMarkup:
@@ -51,51 +40,30 @@ def issuer_kb(bot_username: str = "") -> InlineKeyboardMarkup:
 
 
 def card_text(ident: Identity, *, watermark: bool = False, bot_username: str = "") -> str:
-    bot = _bot(bot_username)
-    name = (ident.display_name or "未填姓名").strip()
-    uname = f"@{ident.username}" if ident.username else "未绑定"
-    uid = ident.official_user_id or "—"
     extra = (ident.card_text or "").strip()
-    brand = brand_name()
-    lines = [
-        f"{BADGE} {brand}官方核验来源：@{bot}",
-        "━━━━━━━━━━━━",
-        f"姓名：{name}",
-        f"账号：{uname}",
-        f"ID：{uid}",
-        "━━━━━━━━━━━━",
-    ]
-    if extra:
-        lines += [extra, "━━━━━━━━━━━━"]
-    lines += [
-        "谨防仿冒：请以本机器人实时查询结果为准",
-        f"如需查询，请在输入框内输入：@{bot} + 用户名",
-        "如需获取官方核验卡，请点击下方「开通官方核验」",
-    ]
-    return "\n".join(lines)
+    return render_tpl(
+        "paid",
+        {
+            "机器人": _bot(bot_username),
+            "姓名": (ident.display_name or "未填姓名").strip(),
+            "账号": f"@{ident.username}" if ident.username else "未绑定",
+            "ID": ident.official_user_id or "—",
+            "正文": extra,
+        },
+    )
 
 
 def promo_text(bot_name: str = "", name: str = "") -> str:
     if name and is_platform_bot(name, bot_name):
         return issuer_text(bot_name)
-    bot = _bot(bot_name)
-    brand = brand_name()
-    lines = [
-        f"{BADGE} {brand} 官方核验来源：@{bot}",
-        "━━━━━━━━━━━━",
-    ]
-    if name:
-        lines += [
-            f"@{name.lstrip('@')} 尚未完成官方登记",
-            "本机器人暂无该账号的有效资料",
-            "━━━━━━━━━━━━",
-        ]
-    lines += [
-        "谨防仿冒：只认本机器人实时查询结果",
-        f"查询：任意输入框输入  @{bot} + 用户名",
-        "申请官方卡：点下方「开通官方核验」",
-    ]
-    return "\n".join(lines)
+    query = f"@{name.lstrip('@')}" if name else ""
+    return render_tpl(
+        "unpaid",
+        {
+            "机器人": _bot(bot_name),
+            "查询词": query or "该账号",
+        },
+    )
 
 
 def card_kb(ident: Identity | None = None, *, share_url: str = "", bot_username: str = "", username: str = "") -> InlineKeyboardMarkup:
@@ -119,11 +87,16 @@ async def send_card(message, ident: Identity, *, bot=None, bot_username: str = "
         try:
             photos = await bot.get_user_profile_photos(ident.official_user_id, limit=1)
             if photos.total_count:
-                await message.reply_photo(photos.photos[0][-1].file_id, caption=text[:1024], reply_markup=kb)
+                await message.reply_photo(
+                    photos.photos[0][-1].file_id,
+                    caption=text[:1024],
+                    reply_markup=kb,
+                    parse_mode=PARSE_MODE,
+                )
                 return
         except Exception:
             pass
-    await message.reply_text(text, reply_markup=kb)
+    await message.reply_text(text, reply_markup=kb, parse_mode=PARSE_MODE)
 
 
 def alert_text(ident: Identity) -> str:
