@@ -12,6 +12,8 @@ from app.services import add_admin_audit
 from app.tg_webapp import require_webapp_user
 
 JS_PATH = Path(__file__).resolve().parent / "templates" / "mini.js"
+JS_CORE = Path(__file__).resolve().parent / "templates" / "mini-core.js"
+JS_UI = Path(__file__).resolve().parent / "templates" / "mini-ui.js"
 
 
 def _admin(body=None, user_id: int = 0, init_data: str = "") -> int:
@@ -27,6 +29,18 @@ def mount_card_admin(app) -> None:
         if JS_PATH.exists():
             return FileResponse(JS_PATH, media_type="text/javascript; charset=utf-8")
         return Response("console.error('mini.js missing')", media_type="text/javascript")
+
+    @app.get("/mini-core.js")
+    async def mini_core_js():
+        if JS_CORE.exists():
+            return FileResponse(JS_CORE, media_type="text/javascript; charset=utf-8")
+        return Response("console.error('mini-core.js missing')", media_type="text/javascript")
+
+    @app.get("/mini-ui.js")
+    async def mini_ui_js():
+        if JS_UI.exists():
+            return FileResponse(JS_UI, media_type="text/javascript; charset=utf-8")
+        return Response("console.error('mini-ui.js missing')", media_type="text/javascript")
 
     @app.get("/api/mini/admin/card")
     async def get_card(user_id: int = 0, init_data: str = ""):
