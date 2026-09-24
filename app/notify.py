@@ -51,3 +51,15 @@ async def notify_admins_activation(bot, tenant, order, *, paid_label: str = "", 
             await bot.send_message(chat_id=admin_id, text=text)
         except Exception as exc:
             log.warning("admin activation notify failed admin=%s: %s", admin_id, exc)
+    # Wave5: one-shot profile onboarding DM to the payer
+    try:
+        from app.db import get_session
+        from app.wave5_onboarding import maybe_send_onboarding_dm
+
+        db = get_session()
+        try:
+            await maybe_send_onboarding_dm(bot, db, tenant)
+        finally:
+            db.close()
+    except Exception as exc:  # noqa: BLE001
+        log.warning("onboarding dm hook failed: %s", exc)

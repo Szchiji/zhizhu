@@ -50,7 +50,8 @@ def test_confirm_helper_in_mini_confirm():
     assert "user_delete" in text
     assert "确认改价" in text or "保存套餐" in text
     mod = Path("app/wave4_mini_html.py").read_text(encoding="utf-8")
-    assert "mini-confirm.js?v=13" in mod
+    assert "mini-confirm.js?v=" in mod
+    assert "MINI_ASSET_VER" in mod
     assert "wave4_mini_html" in mod
     mount = Path("app/admin_roles_mount.py").read_text(encoding="utf-8")
     assert "install_mini_html_middleware" in mount
