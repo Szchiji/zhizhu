@@ -38,7 +38,7 @@ USDT_CONFIRM_SECRET=随机串
 
 可选：`BRAND_NAME` `BRAND_TITLE` `不填则用机器人 getMe 名字`。
 
-4. `域名/healthz` 返回 `{"ok":true}`
+4. `域名/healthz` 返回 `ok` + `db` / `redis` / `usdt_watch`（见下方）
 5. BotFather：`/setinline` 、`/setjoingroups` 、`/setmenubutton` 可选
 6. 发 `/start`，左下角「小程序」
 
@@ -77,3 +77,23 @@ pytest -q
 - **Clone bot**: paid users paste a BotFather token into the platform bot when clone is enabled.
   Server encrypts `Tenant.bot_token_enc`, then `setWebhook` to `{WEBHOOK_BASE_URL}/wh/t/{tenant_id}`.
   Requires `WEBHOOK_BASE_URL`, `WEBHOOK_SECRET`, `TOKEN_ENC_KEY`.
+
+
+## Wave 4 — Permissions
+
+- Settings key `admin_roles`: JSON `{ "tg_id": "owner|ops|support" }`.
+- Env `ADMIN_TG_IDS` default to **owner**. Caps: support=confirm/view; ops=price/users/export/…; owner=all.
+- Admin APIs: `GET/POST /api/mini/admin/roles` (owner-only write).
+- Mini confirm dialogs via `/mini-confirm.js` before sensitive actions.
+
+## Wave 5 — UX
+
+- `app/static_ver.py` → `MINI_ASSET_VER` (cache-bust for mini JS).
+- After activation: one-shot DM + 「我的」onboarding banner if display_name/username empty.
+
+## Wave 6 — Eng debt
+
+- Chunk note: `docs/CHUNKED_SOURCES.md`; assemble: `python scripts/assemble_chunks.py admin|platform_bot`
+- `/healthz`: `{ok, db, redis, usdt_watch}` (Redis optional; USDT last-check age when watcher ran)
+- Settings backup: `GET /api/mini/admin/settings/export` (secrets redacted)
+- Coupons / clone / multi-plan / REDIS_URL: see `.env.example` and Wave 3 section above
