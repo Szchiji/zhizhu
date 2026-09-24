@@ -17,6 +17,7 @@ from app.home import render_help, render_start
 from app.inline_query import on_inline
 from app.models import Identity, Order, Tenant, utcnow
 from app.plans import clone_on, ensure_plan_key, list_plan_defs, plan_info, plan_stars, plan_usdt, price_board, set_clone
+from app.notify import notify_admins_activation
 from app.services import activate_order, add_admin_audit, add_event, find_paid_by_tg_id, fmt_until, get_or_create_tenant, get_setting, new_code, open_order, parse_username, resolve_paid_identity, save_paid_profile, set_setting, tenant_usable, unique_usdt_amount
 from app.verify import PARSE_MODE, card_kb, card_text, promo_text, share_url
 

@@ -1,0 +1,100 @@
+                "remind_text": get_setting(db, "remind_text", ""),
+                "force_channel": get_setting(db, "force_channel", ""),
+                "force_channel_on": get_setting(db, "force_channel_on", "0"),
+                "home": load_home(db),
+            }
+        finally:
+            db.close()
+
+    @app.get("/api/mini/admin/users")
+    async def admin_users(q: str = "", user_id: int = 0, init_data: str = ""):
+        if not _admin_id(user_id=user_id, init_data=init_data):
+            return JSONResponse({"error": "仅管理员"}, status_code=403)
+        raw = (q or "").strip()
+        if not raw:
+            return {"ok": True, "users": []}
+        db = get_session()
+        try:
+            rows: list[Tenant] = []
+            if raw.isdigit():
+                tg = int(raw)
+                rows = list(db.scalars(select(Tenant).where(or_(Tenant.owner_tg_id == tg, Tenant.id == tg))))
+                ident = db.scalar(select(Identity).where(Identity.official_user_id == tg))
+                if ident:
+                    t = db.get(Tenant, ident.tenant_id)
+                    if t and t not in rows:
+                        rows.append(t)
+            name = parse_username(raw) or raw.lstrip("@")
+            if name:
+                idents = list(
+                    db.scalars(
+                        select(Identity).where(or_(Identity.username.ilike(name), Identity.display_name.ilike(f"%{name}%"))).limit(20)
+                    )
+                )
+                for ident in idents:
+                    t = db.get(Tenant, ident.tenant_id)
+                    if t and t not in rows:
+                        rows.append(t)
+            return {"ok": True, "users": [_dump_user(t) for t in rows[:20]]}
+        finally:
+            db.close()
+
+    @app.post("/api/mini/admin")
+    async def admin_act(request: Request):
+        body = await request.json()
+        admin = _admin_id(body)
+        if not admin:
+            return JSONResponse({"error": "仅管理员"}, status_code=403)
+        action = str(body.get("action") or "")
+        db = get_session()
+        try:
+            if action == "price":
+                rail = str(body.get("rail") or "stars")
+                plan_key = str(body.get("plan") or "year").strip().lower() or "year"
+                try:
+                    value = float(body.get("amount") or 0)
+                except (TypeError, ValueError):
+                    raise HTTPException(400, "bad amount")
+                if rail not in {"stars", "usdt"}:
+                    raise HTTPException(400, "bad rail")
+                setting_key = set_plan_price(db, plan_key, rail, value)
+                stored = get_setting(db, setting_key, "")
+                add_admin_audit(db, admin, "price", target_type="setting", target_id=setting_key, detail=f"amount={stored}")
+                db.commit()
+                return {"ok": True, "board": price_board(db), "plans": list_plans(db)}
+            if action == "plans":
+                try:
+                    plans = save_plan_defs(db, body.get("plans"))
+                except ValueError as exc:
+                    return JSONResponse({"error": str(exc)}, status_code=400)
+                # Optional inline prices: [{id, stars, usdt}, ...]
+                for row in body.get("plans") or []:
+                    if not isinstance(row, dict):
+                        continue
+                    pid = str(row.get("id") or "").strip().lower()
+                    if not pid:
+                        continue
+                    if row.get("stars") is not None and str(row.get("stars")).strip() != "":
+                        try:
+                            set_plan_price(db, pid, "stars", float(row["stars"]))
+                        except (TypeError, ValueError):
+                            pass
+                    if row.get("usdt") is not None and str(row.get("usdt")).strip() != "":
+                        try:
+                            set_plan_price(db, pid, "usdt", float(row["usdt"]))
+                        except (TypeError, ValueError):
+                            pass
+                add_admin_audit(db, admin, "plans", target_type="setting", target_id="membership_plans", detail=f"n={len(plans)}")
+                db.commit()
+                return {"ok": True, "board": price_board(db), "plans": list_plans(db)}
+            if action == "addr":
+                addr = str(body.get("address") or "").strip()
+                if not addr.startswith("T") or len(addr) < 30:
+                    return JSONResponse({"error": "TRC20 地址无效"}, status_code=400)
+                set_setting(db, "usdt_address", addr)
+                add_admin_audit(db, admin, "addr", target_type="setting", target_id="usdt_address", detail=addr[:16] + "…")
+                db.commit()
+                return {"ok": True}
+            if action == "remind":
+                try:
+                    n = max(0, min(int(float(body.get("days") or 7)), 90))

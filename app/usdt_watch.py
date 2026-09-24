@@ -14,6 +14,7 @@ from app.config import USDT_ADDRESS, USDT_CHAIN
 from app.db import get_session
 from app.models import Order, Tenant, utcnow
 from app.plans import plan_info
+from app.notify import notify_admins_activation
 from app.services import activate_order, add_event, fmt_until, get_setting, save_paid_profile, set_setting, tenant_usable
 
 log = logging.getLogger("zhizhu.usdt")
@@ -192,6 +193,16 @@ async def check_once(bot=None) -> int:
                     )
                 except Exception as exc:
                     log.warning("notify failed %s", exc)
+                try:
+                    await notify_admins_activation(
+                        bot,
+                        tenant,
+                        match,
+                        paid_label=label,
+                        username=getattr(user, "username", None) or "",
+                    )
+                except Exception as exc:
+                    log.warning("admin notify failed %s", exc)
         return activated
     finally:
         db.close()
