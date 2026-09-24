@@ -14,6 +14,11 @@ def set_bot(bot) -> None:
     _bot = bot
 
 
+def get_bot():
+    """Module-level bot ref set at lifespan start; None if bot not ready."""
+    return _bot
+
+
 def is_blocked(tenant) -> bool:
     if not tenant:
         return False
