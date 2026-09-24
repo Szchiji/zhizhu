@@ -160,17 +160,42 @@ async def check_once(bot=None) -> int:
                 continue
             ts = int(tx.get("block_timestamp") or 0) / 1000
             match = None
+            candidates = []
             for order in pending:
                 if abs(float(order.amount) - paid) > 0.001:
                     continue
                 created = order.created_at.timestamp() if order.created_at else 0
                 if ts and created and ts + 120 < created:
                     continue
-                match = order
-                break
+                candidates.append(order)
+            if candidates:
+                candidates.sort(key=lambda o: (0 if o.status != "confirming" else 1, o.created_at or utcnow()))
+                match = candidates[0]
+                if len(candidates) > 1:
+                    log.warning(
+                        "usdt amount collision paid=%s candidates=%s chosen=%s",
+                        paid,
+                        [o.public_code for o in candidates],
+                        match.public_code,
+                    )
             if not match:
                 continue
-            match.txid = txid
+            if match.status == "confirming" and match.txid and match.txid != txid:
+                continue
+            if match.status in {"pending", "draft"}:
+                match.status = "confirming"
+                match.txid = txid
+                db.flush()
+                conflict = db.scalar(
+                    select(Order).where(Order.txid == txid, Order.id != match.id)
+                )
+                if conflict:
+                    match.txid = None
+                    match.status = "pending"
+                    db.flush()
+                    continue
+            else:
+                match.txid = txid
             add_event(db, match, "paid", "trongrid_auto")
             tenant = activate_order(db, match)
             user = await _profile_from_bot(bot, tenant.owner_tg_id) if bot else SimpleNamespace(

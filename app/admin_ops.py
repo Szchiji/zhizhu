@@ -3,13 +3,15 @@ from __future__ import annotations
 import csv
 import io
 
+from fastapi import Request
 from fastapi.responses import JSONResponse, Response
 from sqlalchemy import or_, select
 
 from app.config import ADMIN_TG_IDS
 from app.db import get_session
 from app.models import AdminAudit, Order, Tenant
-from app.services import fmt_until
+from app.services import add_admin_audit, fmt_until
+from app.wave2_revoke import revoke_order
 from app.tg_webapp import require_webapp_user
 
 
@@ -90,5 +92,84 @@ def mount_admin_ops(app) -> None:
             body = "\ufeff" + buf.getvalue()
             headers = {"Content-Disposition": 'attachment; filename="%s"' % fname}
             return Response(content=body.encode("utf-8"), media_type="text/csv; charset=utf-8", headers=headers)
+        finally:
+            db.close()
+
+
+    @app.get("/api/mini/admin/reconcile")
+    async def admin_reconcile(limit: int = 50, user_id: int = 0, init_data: str = ""):
+        """Read-only USDT order reconciliation: pending/expired/unmatched txids."""
+        if not _admin_id(user_id=user_id, init_data=init_data):
+            return JSONResponse({"error": "仅管理员"}, status_code=403)
+        try:
+            lim = max(1, min(int(limit or 50), 200))
+        except (TypeError, ValueError):
+            lim = 50
+        db = get_session()
+        try:
+            from app.models import utcnow
+            now = utcnow()
+            rows = list(db.scalars(select(Order).where(Order.rail == "usdt").order_by(Order.id.desc()).limit(lim)))
+            out = []
+            for o in rows:
+                tenant = db.get(Tenant, o.tenant_id)
+                flag = ""
+                if o.status in {"pending", "confirming", "draft"} and o.expires_at and o.expires_at < now:
+                    flag = "expired_unpaid"
+                elif o.status == "active" and not o.txid and o.rail == "usdt":
+                    flag = "active_without_txid"
+                elif o.status in {"pending", "confirming"} and o.txid:
+                    flag = "txid_but_not_active"
+                elif o.status == "expired":
+                    flag = "expired"
+                out.append(
+                    {
+                        "code": o.public_code,
+                        "status": o.status,
+                        "amount": f"{float(o.amount):g}",
+                        "txid": o.txid or "",
+                        "tg_id": tenant.owner_tg_id if tenant else None,
+                        "expires_at": fmt_until(o.expires_at) if o.expires_at else "",
+                        "paid_at": fmt_until(o.paid_at) if o.paid_at else "",
+                        "flag": flag,
+                    }
+                )
+            return {"ok": True, "orders": out}
+        finally:
+            db.close()
+
+    @app.post("/api/mini/admin/revoke")
+    async def admin_revoke(request: Request):
+        """Internal Stars/USDT revoke: mark refunded and pull back paid_until days."""
+        body = await request.json()
+        admin = _admin_id(body=body)
+        if not admin:
+            return JSONResponse({"error": "仅管理员"}, status_code=403)
+        code = str(body.get("code") or "").upper().strip()
+        if not code:
+            return JSONResponse({"error": "缺少订单号"}, status_code=400)
+        db = get_session()
+        try:
+            order = db.scalar(select(Order).where(Order.public_code == code))
+            if not order:
+                return JSONResponse({"error": "订单不存在"}, status_code=404)
+            if order.status not in {"active", "paid", "confirming"}:
+                return JSONResponse({"error": f"订单状态 {order.status} 不可撤销"}, status_code=400)
+            tenant = revoke_order(db, order, reason="admin_revoke")
+            add_admin_audit(
+                db,
+                admin,
+                "revoke",
+                target_type="order",
+                target_id=order.public_code,
+                detail=f"rail={order.rail};tenant={order.tenant_id};paid_until={fmt_until(tenant.paid_until) if tenant and tenant.paid_until else ''}",
+            )
+            db.commit()
+            return {
+                "ok": True,
+                "code": order.public_code,
+                "status": order.status,
+                "paid_until": fmt_until(tenant.paid_until) if tenant and tenant.paid_until else "",
+            }
         finally:
             db.close()
