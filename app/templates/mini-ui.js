@@ -190,3 +190,33 @@ async function cardPack(pack){
     show(ok,'已套用并保存格式包。可再微调后点「保存模板」');
   }catch(e){show(err,e.message);}
 }
+
+
+const PREVIEW_SAMPLES={'品牌':'示例品牌','机器人':'ExampleBot','姓名':'张三','账号':'@zhangsan','ID':'123456789','有效期':'2027-01-01 12:00','正文':'这是卡片正文示例','查询词':'@someone'};
+const PREVIEW_TG_TAGS=new Set(['b','strong','i','em','u','ins','s','strike','del','code','pre','a','blockquote','br']);
+function fillPreviewPlaceholders(src){let out=String(src||'');Object.keys(PREVIEW_SAMPLES).forEach(k=>{out=out.split('{'+k+'}').join(PREVIEW_SAMPLES[k]);});return out;}
+function sanitizePreviewHtml(raw){
+  const filled=fillPreviewPlaceholders(raw);
+  let doc;try{doc=new DOMParser().parseFromString('<div id="pvroot">'+filled+'</div>','text/html');}catch(e){const d=document.createElement('div');d.textContent=filled;return d.innerHTML.replace(/\n/g,'<br>');}
+  const root=doc.getElementById('pvroot')||doc.body;
+  const walk=(node)=>{
+    if(!node)return;
+    if(node.nodeType===3){const parts=String(node.nodeValue||'').split('\n');if(parts.length<=1)return;const frag=doc.createDocumentFragment();parts.forEach((part,i)=>{if(i)frag.appendChild(doc.createElement('br'));if(part)frag.appendChild(doc.createTextNode(part));});node.parentNode.replaceChild(frag,node);return;}
+    if(node.nodeType!==1){node.parentNode&&node.parentNode.removeChild(node);return;}
+    const name=(node.tagName||'').toLowerCase();
+    if(name==='tg-emoji'||name==='tg-spoiler'||(name==='span'&&(node.getAttribute('class')||'')==='tg-spoiler')){node.parentNode.replaceChild(doc.createTextNode(node.textContent||'▮'),node);return;}
+    if(name==='script'||name==='style'||name==='iframe'||name==='img'){node.parentNode.removeChild(node);return;}
+    if(!PREVIEW_TG_TAGS.has(name)&&name!=='div'){const kids=Array.from(node.childNodes);kids.forEach(walk);const parent=node.parentNode;if(!parent)return;while(node.firstChild)parent.insertBefore(node.firstChild,node);parent.removeChild(node);return;}
+    Array.from(node.attributes||[]).forEach(a=>{const an=(a.name||'').toLowerCase();if(name==='a'&&an==='href'&&/^(https?:\/\/|tg:\/\/)/i.test(a.value||''))return;if(name==='blockquote'&&an==='expandable')return;node.removeAttribute(a.name);});
+    Array.from(node.childNodes).forEach(walk);
+  };
+  Array.from(root.childNodes).forEach(walk);
+  return root.innerHTML;
+}
+function previewTpl(textareaId){
+  const ta=document.getElementById(textareaId),box=document.getElementById('card-preview'),body=document.getElementById('card-preview-body');
+  if(!ta||!box||!body)return;
+  body.innerHTML=sanitizePreviewHtml(ta.value||'');
+  box.classList.remove('hidden');
+  try{box.scrollIntoView({behavior:'smooth',block:'nearest'});}catch(e){}
+}
