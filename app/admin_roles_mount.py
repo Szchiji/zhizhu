@@ -61,6 +61,35 @@ def _install_admin_id_patches() -> None:
 def mount_wave4(app) -> None:
     _install_admin_id_patches()
 
+    @app.middleware("http")
+    async def wave4_me_is_admin(request: Request, call_next):
+        """Ensure /api/mini/me is_admin reflects settings roles (not only ADMIN_TG_IDS)."""
+        response = await call_next(request)
+        if request.url.path != "/api/mini/me" or response.status_code != 200:
+            return response
+        try:
+            body = b""
+            async for chunk in response.body_iterator:
+                body += chunk
+            data = json.loads(body.decode() or "{}")
+            uid = _uid(
+                user_id=int(request.query_params.get("user_id") or 0),
+                init_data=request.query_params.get("init_data") or "",
+            )
+            if uid and isinstance(data, dict) and data.get("ok"):
+                db = get_session()
+                try:
+                    data["is_admin"] = bool(is_admin_tg(db, uid))
+                    if data["is_admin"]:
+                        data["admin_role"] = role_of(db, uid)
+                finally:
+                    db.close()
+                return JSONResponse(data, status_code=200)
+            return JSONResponse(data, status_code=response.status_code)
+        except Exception as exc:  # noqa: BLE001
+            log.warning("wave4 me patch failed: %s", exc)
+            return response
+
     @app.get("/api/mini/admin/roles")
     async def get_roles(user_id: int = 0, init_data: str = ""):
         uid = _uid(user_id=user_id, init_data=init_data)
