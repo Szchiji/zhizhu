@@ -37,8 +37,10 @@ async def _admin_cb(query, context, data: str, db) -> bool:
         await _show_admin(query.message, db)
         return True
     if data == 'adm:price':
-        await query.message.reply_text('选择要改价的套餐', reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton('一年', callback_data='adm:pk:year')],[InlineKeyboardButton('返回后台', callback_data='admin')]]))
+        rows = [[InlineKeyboardButton(p['label'], callback_data=f"adm:pk:{p['id']}")] for p in list_plan_defs(db)]
+        rows.append([InlineKeyboardButton('返回后台', callback_data='admin')])
+        await query.message.reply_text('选择要改价的套餐', reply_markup=InlineKeyboardMarkup(rows))
         return True
     if data.startswith('adm:pk:'):
-        key = data.split(':')[2]
+        key = ensure_plan_key(db, data.split(':')[2])
         await query.message.reply_text(
