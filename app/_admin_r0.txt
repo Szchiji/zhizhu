@@ -10,6 +10,7 @@ from sqlalchemy import or_, select
 
 from app.access import get_bot, normalize_channel
 from app.admin_ops import mount_admin_ops
+from app.wave2_pending import mount_wave2_pending
 from app.bot_avatar import router as avatar_router
 from app.card_admin import mount_card_admin
 from app.config import ADMIN_TG_IDS, USDT_ADDRESS
@@ -58,6 +59,7 @@ def mount_admin(app) -> None:
     app.include_router(avatar_router)
     mount_card_admin(app)
     mount_admin_ops(app)
+    mount_wave2_pending(app)
 
     @app.post("/api/mini/cancel")
     async def mini_cancel(request: Request):
