@@ -1,6 +1,29 @@
         tenant.bot_token_enc = encrypt_token(text)
         db.commit()
-        await update.effective_message.reply_text(f"已克隆 @{tenant.bot_username}")
+        wh = ""
+        try:
+            from app.config import WEBHOOK_BASE_URL, WEBHOOK_SECRET
+            if WEBHOOK_BASE_URL:
+                wh = f"{WEBHOOK_BASE_URL.rstrip('/')}/wh/t/{tenant.id}"
+                async with httpx.AsyncClient(timeout=20) as client:
+                    wr = await client.post(
+                        f"https://api.telegram.org/bot{text}/setWebhook",
+                        json={
+                            "url": wh,
+                            "secret_token": WEBHOOK_SECRET,
+                            "allowed_updates": ["message", "callback_query", "inline_query"],
+                        },
+                    )
+                if not (wr.json() or {}).get("ok"):
+                    await update.effective_message.reply_text(
+                        f"Token 已保存 @{tenant.bot_username}，但Webhook设置失败：{(wr.json() or {}).get('description')}"
+                    )
+                    return
+        except Exception as exc:
+            await update.effective_message.reply_text(f"Token 已保存，Webhook异常：{exc}")
+            return
+        tip = f"\nWebhook: {wh}" if wh else "\n(未配置 WEBHOOK_BASE_URL，请手动设Webhook到 /wh/t/{id})"
+        await update.effective_message.reply_text(f"已克隆 @{tenant.bot_username}{tip}")
     finally:
         db.close()
 
