@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+import time
 import re
 
 from fastapi.responses import JSONResponse
@@ -50,7 +51,45 @@ def _admin_uid(user_id: int = 0, init_data: str = "", body=None) -> int:
         return 0
 
 
+
+def _install_deep_healthz(app) -> None:
+    """Replace trivial /healthz with deeper payload (db/redis/usdt age)."""
+    for route in list(app.router.routes):
+        if getattr(route, "path", None) == "/healthz":
+            app.router.routes.remove(route)
+
+    @app.get("/healthz")
+    async def healthz():
+        from app.health import health_payload
+
+        return await health_payload()
+
+
+def _install_usdt_stamp() -> None:
+    """Record LAST_CHECK_AT on usdt_watch.check_once without rewriting that module."""
+    try:
+        from app import usdt_watch
+    except Exception as exc:  # noqa: BLE001
+        log.warning("usdt_watch import failed: %s", exc)
+        return
+    if getattr(usdt_watch, "_wave6_stamp_installed", False):
+        return
+    if not hasattr(usdt_watch, "LAST_CHECK_AT"):
+        usdt_watch.LAST_CHECK_AT = None
+    orig = usdt_watch.check_once
+
+    async def check_once_wrapped(bot=None):
+        usdt_watch.LAST_CHECK_AT = time.time()
+        return await orig(bot)
+
+    usdt_watch.check_once = check_once_wrapped
+    usdt_watch._wave6_stamp_installed = True
+
+
 def mount_wave6(app) -> None:
+    _install_deep_healthz(app)
+    _install_usdt_stamp()
+
     @app.get("/api/mini/admin/settings/export")
     async def settings_export(user_id: int = 0, init_data: str = ""):
         admin = _admin_uid(user_id=user_id, init_data=init_data)
