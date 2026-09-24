@@ -102,3 +102,38 @@ def test_card_text_uses_saved_tpl(monkeypatch):
 def test_fill_still_escapes_dynamic():
     out = fill("x{姓名}", {"姓名": "<b>no</b>"})
     assert "&lt;b&gt;no&lt;/b&gt;" in out
+
+
+def test_sanitize_allows_blockquote_tg_emoji_spoiler():
+    raw = (
+        "<blockquote>引用正文</blockquote>"
+        '<blockquote expandable>可展开</blockquote>'
+        '<tg-emoji emoji-id="5368324170671202286">👍</tg-emoji>'
+        "<tg-spoiler>遮罩</tg-spoiler>"
+        '<span class="tg-spoiler">span遮罩</span>'
+    )
+    out = sanitize_telegram_html(raw)
+    assert "<blockquote>引用正文</blockquote>" in out
+    assert "<blockquote expandable>可展开</blockquote>" in out
+    assert '<tg-emoji emoji-id="5368324170671202286">👍</tg-emoji>' in out
+    assert "<tg-spoiler>遮罩</tg-spoiler>" in out
+    assert '<span class="tg-spoiler">span遮罩</span>' in out
+
+
+def test_sanitize_strips_bad_tg_emoji_and_span():
+    raw = (
+        '<tg-emoji emoji-id="abc">x</tg-emoji>'
+        '<tg-emoji onclick="x" emoji-id="1">y</tg-emoji>'
+        '<span class="evil">z</span>'
+        '<span style="color:red" class="tg-spoiler">ok</span>'
+        "<div>bad</div>"
+    )
+    out = sanitize_telegram_html(raw)
+    assert 'emoji-id="abc"' not in out
+    assert "onclick" not in out
+    assert '<tg-emoji emoji-id="1">y</tg-emoji>' in out
+    assert 'class="evil"' not in out
+    assert "z" in out
+    assert "<div>" not in out
+    assert "bad" in out
+    assert '<span class="tg-spoiler">ok</span>' in out
