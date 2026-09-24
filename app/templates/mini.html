@@ -27,7 +27,17 @@ button.ghost{background:#171c26;color:var(--text);border:1px solid var(--line)}
 button.usdt{background:#143528;color:#d9ffe8}
 button:disabled{opacity:.45}
 input,textarea,select{width:100%;border:1px solid var(--line);background:#0b0e14;color:var(--text);border-radius:14px;padding:13px 12px;font-size:15px;margin-top:8px}
-textarea{min-height:88px;line-height:1.55;font-family:ui-monospace,Menlo,monospace;font-size:13px}
+textarea{min-height:120px;line-height:1.55;font-family:ui-monospace,Menlo,monospace;font-size:13px}
+textarea.tpl-area{min-height:200px}
+textarea.home-area{min-height:140px}
+.plan-list{display:flex;flex-direction:column;gap:8px;margin:12px 0 4px}
+.plan-item{display:flex;align-items:center;gap:10px;padding:12px;border:1px solid var(--line);border-radius:14px;background:#0b0e14;cursor:pointer}
+.plan-item.on{border-color:rgba(212,175,55,.45);background:#151a12}
+.plan-item b{flex:1;font-size:14px}
+.plan-item span{color:var(--muted);font-size:12px}
+.plan-row{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}
+.plan-row label{margin-top:0}
+.plan-card{border:1px solid var(--line);border-radius:14px;padding:12px;margin-top:10px;background:#0b0e14}
 label{display:block;margin-top:12px;color:var(--muted);font-size:12px}
 .err,.ok{display:none;border-radius:14px;padding:11px 12px;font-size:13px;margin-bottom:12px}
 .err{background:#2a1518;color:#ffc4c8}.ok{background:#10261c;color:#c6f6d8}
@@ -59,8 +69,10 @@ label{display:block;margin-top:12px;color:var(--muted);font-size:12px}
 <div id="err" class="err"></div><div id="ok" class="ok"></div>
 <section id="tab-pay">
 <div class="card"><div class="kicker">Membership</div><h1>平台身份登记</h1><p class="sub">开通后自动生成登记卡。登记由本平台出具，可撤销，以实时查询为准。</p>
-<div class="price">{{ stars }}⭐ <span>或 {{ usdt }} USDT / 年</span></div>
+<div class="plan-list" id="planlist"></div>
+<div class="price" id="planprice">{{ stars }}⭐ <span>或 {{ usdt }} USDT</span></div>
 <div class="btns"><button onclick="pay(this,'stars')">Stars</button><button class="usdt" onclick="pay(this,'usdt')">USDT</button></div></div>
+<script type="application/json" id="plans-data">{{ plans_json | safe }}</script>
 <div id="checkout" class="card hidden"><div class="kicker">Checkout</div><h1>待支付</h1>
 <div class="row"><span>订单号</span><b id="oid"></b></div><div class="row"><span>金额</span><b id="oamt"></b></div><div class="row"><span>网络</span><b id="ochain"></b></div>
 <div class="mono" id="oaddr"></div><div class="btns"><button class="ghost" onclick="copyAddr()">复制地址</button><button class="ghost" onclick="cancelPay()">取消</button></div></div>
@@ -90,8 +102,10 @@ label{display:block;margin-top:12px;color:var(--muted);font-size:12px}
 
 <div class="adm-sec on" id="asec-price">
 <div class="card"><h2 class="sec">定价 / 收款</h2>
-<label>Stars 年付</label><input id="astars" type="number" /><label>USDT 年付</label><input id="ausdt" type="number" />
-<div class="btns"><button onclick="setPrice('stars')">改 Stars</button><button class="usdt" onclick="setPrice('usdt')">改 USDT</button></div>
+<p class="sub">可配置多个时长套餐（月付/季付/年付或自定义）。留空或未保存多套餐时，仍按原来的单一「年付」价格生效。</p>
+<div id="aplanbox"></div>
+<div class="btns"><button class="ghost" type="button" onclick="addPlanRow()">＋添加套餐</button><button onclick="savePlans()">保存套餐</button></div>
+<p class="hint">字段：标识(英文id) · 名称 · 天数 · Stars · USDT。标识保存后尽量不要改，订单会记录该 id。</p>
 <label>收款地址（TRC20）</label><input id="aaddr" />
 <div class="btns"><button class="ghost" onclick="setAddr()">保存地址</button><button class="ghost" onclick="toggleClone()" id="aclone">克隆</button></div>
 <div class="divider"></div>
@@ -112,14 +126,14 @@ label{display:block;margin-top:12px;color:var(--muted);font-size:12px}
 <p class="pack-hint">以上三项是<strong>版式预设</strong>（布局模板），不是会员档位；点选后写入下方三个文本框，可再微调保存。</p>
 <label>已登记卡</label>
 <div class="tgbar" data-for="ctpaid" data-ph="card"></div>
-<textarea id="ctpaid" maxlength="2500"></textarea>
+<textarea id="ctpaid" class="tpl-area" maxlength="2500"></textarea>
 <label>未登记卡</label>
 <div class="tgbar" data-for="ctunpaid" data-ph="card"></div>
-<textarea id="ctunpaid" maxlength="2500"></textarea>
+<textarea id="ctunpaid" class="tpl-area" maxlength="2500"></textarea>
 <label>出具方卡</label>
 <div class="tgbar" data-for="ctissuer" data-ph="card"></div>
-<textarea id="ctissuer" maxlength="2500"></textarea>
-<p class="hint">工具栏：粗体/斜体/下划线/删除线/代码/代码块/链接/引用/可展开/遮罩；可插入占位符与自定义表情（&lt;tg-emoji&gt;，可粘贴 emoji-id）。保存后请重新查询一张卡核对；旧消息不会自动换文案。</p>
+<textarea id="ctissuer" class="tpl-area" maxlength="2500"></textarea>
+<p class="hint">编辑的是 Telegram HTML 源码；工具栏会插入标签。工具栏：粗体/斜体/下划线/删除线/代码/代码块/链接/引用/可展开/遮罩；可插入占位符与自定义表情（&lt;tg-emoji&gt;，可粘贴 emoji-id）。保存后请重新查询一张卡核对；旧消息不会自动换文案。</p>
 <p class="hint">自定义表情说明：机器人通常需绑定 Fragment 购买的用户名，自定义表情才会以动画渲染；否则客户端只显示后备 Unicode 表情。</p>
 <div class="btns"><button id="btnsavecard" onclick="saveCardTpl()" disabled>保存模板</button></div>
 </div>
@@ -130,13 +144,13 @@ label{display:block;margin-top:12px;color:var(--muted);font-size:12px}
 <label>标题（可空，空则用机器人名）</label><input id="htitle" maxlength="40" />
 <label>未开通介绍</label>
 <div class="tgbar" data-for="hbody0" data-ph="home"></div>
-<textarea id="hbody0" maxlength="500"></textarea>
+<textarea id="hbody0" class="home-area" maxlength="500"></textarea>
 <label>已开通介绍</label>
 <div class="tgbar" data-for="hbody1" data-ph="home"></div>
-<textarea id="hbody1" maxlength="500"></textarea>
+<textarea id="hbody1" class="home-area" maxlength="500"></textarea>
 <label>使用说明</label>
 <div class="tgbar" data-for="hhelp" data-ph="home"></div>
-<textarea id="hhelp" maxlength="800"></textarea>
+<textarea id="hhelp" class="home-area" maxlength="800"></textarea>
 <label>按钮1</label><input id="hb1" /><select id="ha1"><option value="mini">打开小程序</option><option value="lookup">机器人查询</option><option value="help">发送说明</option></select>
 <label>按钮2</label><input id="hb2" /><select id="ha2"><option value="mini">打开小程序</option><option value="lookup">机器人查询</option><option value="help">发送说明</option></select>
 <label>按钮3</label><input id="hb3" /><select id="ha3"><option value="mini">打开小程序</option><option value="lookup">机器人查询</option><option value="help">发送说明</option></select>
@@ -184,5 +198,5 @@ label{display:block;margin-top:12px;color:var(--muted);font-size:12px}
 <button id="n3" onclick="tab('me')">我的</button>
 <button id="n4" class="hidden" onclick="tab('adm')">管理</button>
 </div>
-<script src="/mini.js?v=10"></script>
+<script src="/mini.js?v=11"></script>
 </body></html>
