@@ -9,6 +9,12 @@
         add_event(db, order, 'paid', 'stars_successful_payment')
         tenant = activate_order(db, order)
         save_paid_profile(db, tenant, update.effective_user)
+        try:
+            label = plan_info(db, order.plan or 'year')['label']
+            uname = getattr(update.effective_user, 'username', None) or ''
+            await notify_admins_activation(context.bot, tenant, order, paid_label=label, username=uname)
+        except Exception:
+            pass
         await update.message.reply_text(f"已开通{plan_info(db, order.plan or 'year')['label']}至 {fmt_until(tenant.paid_until)}")
     finally:
         db.close()
