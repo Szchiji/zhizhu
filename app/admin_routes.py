@@ -18,3 +18,6 @@ def mount_admin(app):
     from app.coupons import mount_wave3
 
     mount_wave3(app)
+    from app.admin_roles_mount import mount_wave4
+
+    mount_wave4(app)
