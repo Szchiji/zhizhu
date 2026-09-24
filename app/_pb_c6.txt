@@ -18,21 +18,21 @@
 
 
 async def _pay_stars(chat_id, message, context, tenant: Tenant, db, key: str) -> None:
-    if key not in PLANS:
-        key = 'year'
+    key = ensure_plan_key(db, key)
+    meta = plan_info(db, key)
     if open_order(db, tenant.id):
         await message.reply_text('已有待支付订单。')
         return
     price = plan_stars(db, key)
     payload = f'stars:{key}:{tenant.id}:{new_code()}'
-    db.add(Order(public_code=new_code(), tenant_id=tenant.id, rail='stars', plan=key, period_days=PLANS[key]['days'], amount=price, currency='XTR', status='pending', payload=payload, expires_at=utcnow() + timedelta(hours=24)))
+    db.add(Order(public_code=new_code(), tenant_id=tenant.id, rail='stars', plan=key, period_days=meta['days'], amount=price, currency='XTR', status='pending', payload=payload, expires_at=utcnow() + timedelta(hours=24)))
     db.commit()
-    await context.bot.send_invoice(chat_id=chat_id, title=f"{brand_name()}·{PLANS[key]['label']}", description='开通后可保存平台登记资料', payload=payload, provider_token='', currency='XTR', prices=[LabeledPrice(PLANS[key]['label'], price)])
+    await context.bot.send_invoice(chat_id=chat_id, title=f"{brand_name()}·{meta['label']}", description='开通后可保存平台登记资料', payload=payload, provider_token='', currency='XTR', prices=[LabeledPrice(meta['label'], price)])
 
 
 async def _pay_usdt(message, tenant: Tenant, db, key: str) -> None:
-    if key not in PLANS:
-        key = 'year'
+    key = ensure_plan_key(db, key)
+    meta = plan_info(db, key)
     addr = _pay_address(db)
     if not addr:
         await message.reply_text('尚未配置 USDT 地址')

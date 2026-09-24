@@ -9,7 +9,7 @@
         add_event(db, order, 'paid', 'stars_successful_payment')
         tenant = activate_order(db, order)
         save_paid_profile(db, tenant, update.effective_user)
-        await update.message.reply_text(f"已开通{PLANS.get(order.plan, {}).get('label', '')}至 {fmt_until(tenant.paid_until)}")
+        await update.message.reply_text(f"已开通{plan_info(db, order.plan or 'year')['label']}至 {fmt_until(tenant.paid_until)}")
     finally:
         db.close()
 

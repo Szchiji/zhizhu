@@ -1,11 +1,11 @@
-            f"{PLANS[key]['label']} 现价 {plan_stars(db, key)}⭐ / {plan_usdt(db, key):g} U",
+            f"{plan_info(db, key)['label']} 现价 {plan_stars(db, key)}⭐ / {plan_usdt(db, key):g} U",
             reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton('Stars', callback_data=f'adm:pr:{key}:stars'), InlineKeyboardButton('USDT', callback_data=f'adm:pr:{key}:usdt')],[InlineKeyboardButton('返回', callback_data='adm:price')]]),
         )
         return True
     if data.startswith('adm:pr:'):
         _, _, key, rail = data.split(':')
         context.user_data['wait'] = f'admin_price:{key}:{rail}'
-        await query.message.reply_text(f"发送新的 {PLANS[key]['label']} {'⭐' if rail=='stars' else 'USDT'} 价格")
+        await query.message.reply_text(f"发送新的 {plan_info(db, key)['label']} {'⭐' if rail=='stars' else 'USDT'} 价格")
         return True
     if data == 'adm:addr':
         context.user_data['wait'] = 'admin_addr'

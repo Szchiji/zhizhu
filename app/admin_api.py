@@ -13,7 +13,7 @@ from app.config import ADMIN_TG_IDS, USDT_ADDRESS
 from app.db import get_session
 from app.home import load_home, save_home
 from app.models import Identity, Order, Tenant, utcnow
-from app.plans import clone_on, plan_stars, plan_usdt, price_board, set_clone
+from app.plans import clone_on, list_plans, plan_stars, plan_usdt, price_board, save_plan_defs, set_clone, set_plan_price
 from app.services import activate_order, add_admin_audit, add_event, fmt_until, get_or_create_tenant, get_setting, open_order, parse_username, set_setting
 from app.tg_webapp import require_webapp_user
 
@@ -102,9 +102,11 @@ def mount_admin(app) -> None:
                     "tg_id": tenant.owner_tg_id if tenant else None,
                     "txid": o.txid or "",
                 })
+            plans = list_plans(db)
             return {
                 "ok": True,
                 "board": price_board(db),
+                "plans": plans,
                 "stars": plan_stars(db, "year"),
                 "usdt": f"{plan_usdt(db, 'year'):g}",
                 "address": get_setting(db, "usdt_address", USDT_ADDRESS),
@@ -165,16 +167,43 @@ def mount_admin(app) -> None:
         try:
             if action == "price":
                 rail = str(body.get("rail") or "stars")
+                plan_key = str(body.get("plan") or "year").strip().lower() or "year"
                 try:
                     value = float(body.get("amount") or 0)
                 except (TypeError, ValueError):
                     raise HTTPException(400, "bad amount")
-                key = "stars_year" if rail == "stars" else "usdt_year"
-                stored = str(int(value) if rail == "stars" else f"{value:g}")
-                set_setting(db, key, stored)
-                add_admin_audit(db, admin, "price", target_type="setting", target_id=key, detail=f"amount={stored}")
+                if rail not in {"stars", "usdt"}:
+                    raise HTTPException(400, "bad rail")
+                setting_key = set_plan_price(db, plan_key, rail, value)
+                stored = get_setting(db, setting_key, "")
+                add_admin_audit(db, admin, "price", target_type="setting", target_id=setting_key, detail=f"amount={stored}")
                 db.commit()
-                return {"ok": True, "board": price_board(db)}
+                return {"ok": True, "board": price_board(db), "plans": list_plans(db)}
+            if action == "plans":
+                try:
+                    plans = save_plan_defs(db, body.get("plans"))
+                except ValueError as exc:
+                    return JSONResponse({"error": str(exc)}, status_code=400)
+                # Optional inline prices: [{id, stars, usdt}, ...]
+                for row in body.get("plans") or []:
+                    if not isinstance(row, dict):
+                        continue
+                    pid = str(row.get("id") or "").strip().lower()
+                    if not pid:
+                        continue
+                    if row.get("stars") is not None and str(row.get("stars")).strip() != "":
+                        try:
+                            set_plan_price(db, pid, "stars", float(row["stars"]))
+                        except (TypeError, ValueError):
+                            pass
+                    if row.get("usdt") is not None and str(row.get("usdt")).strip() != "":
+                        try:
+                            set_plan_price(db, pid, "usdt", float(row["usdt"]))
+                        except (TypeError, ValueError):
+                            pass
+                add_admin_audit(db, admin, "plans", target_type="setting", target_id="membership_plans", detail=f"n={len(plans)}")
+                db.commit()
+                return {"ok": True, "board": price_board(db), "plans": list_plans(db)}
             if action == "addr":
                 addr = str(body.get("address") or "").strip()
                 if not addr.startswith("T") or len(addr) < 30:

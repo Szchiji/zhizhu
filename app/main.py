@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 from contextlib import asynccontextmanager
 from datetime import timedelta
@@ -34,7 +35,7 @@ from app.crypto_token import decrypt_token
 from app.db import get_session, init_db
 from app.entry import deny_json
 from app.models import Identity, Order, Tenant, utcnow
-from app.plans import PLANS, plan_stars, plan_usdt
+from app.plans import ensure_plan_key, list_plans, plan_info, plan_label_for, plan_stars, plan_usdt
 from app.platform_bot import build_platform_app
 from app.rate_limit import SlidingWindowLimiter
 from app.services import (
@@ -152,10 +153,15 @@ async def root():
 async def mini(request: Request):
     db = get_session()
     try:
+        plans = list_plans(db)
         resp = templates.TemplateResponse(
             request,
             "mini.html",
-            {"stars": plan_stars(db, "year"), "usdt": f"{plan_usdt(db, 'year'):g}"},
+            {
+                "stars": plan_stars(db, "year"),
+                "usdt": f"{plan_usdt(db, 'year'):g}",
+                "plans_json": json.dumps(plans, ensure_ascii=False).replace("<", "\\u003c"),
+            },
         )
         resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
         resp.headers["Pragma"] = "no-cache"
@@ -195,7 +201,7 @@ async def mini_me(user_id: int = 0, init_data: str = "", username: str = "", dis
             "paid": paid,
             "is_admin": uid in ADMIN_TG_IDS,
             "plan": tenant.plan,
-            "plan_label": PLANS.get(tenant.plan, {}).get("label", tenant.plan or "—"),
+            "plan_label": plan_label_for(db, tenant.plan),
             "paid_until": until or "—",
             "username": ident.username if ident else "",
             "display_name": ident.display_name if ident else "",
