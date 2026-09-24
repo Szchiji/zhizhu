@@ -9,7 +9,8 @@ from sqlalchemy import select
 
 from app.db import get_session, init_db
 from app.models import Order, utcnow
-from app.services import activate_order, get_or_create_tenant, new_code, revoke_order, set_setting
+from app.services import activate_order, get_or_create_tenant, new_code, set_setting
+from app.wave2_revoke import revoke_order
 
 
 def setup_function():
@@ -149,7 +150,6 @@ def test_mini_me_includes_pending(monkeypatch):
 
     monkeypatch.setattr(tw, "require_webapp_user", lambda **kw: 77)
     monkeypatch.setattr(main, "require_webapp_user", lambda **kw: 77, raising=False)
-    # also patch _uid if needed
     if hasattr(main, "_uid"):
         monkeypatch.setattr(main, "_uid", lambda *a, **k: 77)
 
