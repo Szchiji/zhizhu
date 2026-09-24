@@ -24,3 +24,6 @@ def mount_admin(app):
     from app.wave5_onboarding import mount_wave5
 
     mount_wave5(app)
+    from app.wave6_settings_export import mount_wave6
+
+    mount_wave6(app)
