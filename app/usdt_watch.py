@@ -13,7 +13,7 @@ from app.brand import refresh_from_bot
 from app.config import USDT_ADDRESS, USDT_CHAIN
 from app.db import get_session
 from app.models import Order, Tenant, utcnow
-from app.plans import PLANS
+from app.plans import plan_info
 from app.services import activate_order, add_event, fmt_until, get_setting, save_paid_profile, set_setting, tenant_usable
 
 log = logging.getLogger("zhizhu.usdt")
@@ -180,7 +180,7 @@ async def check_once(bot=None) -> int:
             used.add(txid)
             activated += 1
             if bot and tenant:
-                label = PLANS.get(match.plan, {}).get("label", match.plan)
+                label = plan_info(db, match.plan or "year")["label"]
                 uname = f"@{user.username}" if user.username else "未设用户名"
                 try:
                     await bot.send_message(
