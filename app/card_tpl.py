@@ -13,7 +13,24 @@ log = logging.getLogger("zhizhu.card_tpl")
 KEYS = ("paid", "unpaid", "issuer")
 PACKS = ("official", "brief", "pass")
 # Telegram Bot API HTML subset (https://core.telegram.org/bots/api#html-style)
-TG_TAGS = ("b", "strong", "i", "em", "u", "ins", "s", "strike", "del", "code", "pre", "a")
+TG_TAGS = (
+    "b",
+    "strong",
+    "i",
+    "em",
+    "u",
+    "ins",
+    "s",
+    "strike",
+    "del",
+    "code",
+    "pre",
+    "a",
+    "blockquote",
+    "tg-emoji",
+    "tg-spoiler",
+    "span",
+)
 FOOT = (
     "〇 登记方：本平台（@{机器人}）\n"
     "〇 效力：以实时查询为准；平台可撤销登记\n"
@@ -73,8 +90,11 @@ PACK_BODIES = {
     },
 }
 
-_TAG_RE = re.compile(r"</?\s*([a-zA-Z0-9]+)(\s[^>]*)?>", re.I)
-_A_OPEN_RE = re.compile(r'<a\s+[^>]*href\s*=\s*([\'"])(.*?)\1[^>]*>', re.I)
+_TAG_RE = re.compile(r"</?\s*([a-zA-Z0-9-]+)(\s[^>]*)?>", re.I)
+_A_OPEN_RE = re.compile(r'<a\s+[^>]*href\s*=\s*([\'\"])(.*?)\1[^>]*>', re.I)
+_EMOJI_OPEN_RE = re.compile(r'<tg-emoji\s+[^>]*emoji-id\s*=\s*([\'\"])(\d+)\1[^>]*>', re.I)
+_SPAN_OPEN_RE = re.compile(r'<span\s+[^>]*class\s*=\s*([\'\"])tg-spoiler\1[^>]*>', re.I)
+_BQ_OPEN_RE = re.compile(r'<blockquote(\s+expandable)?\s*>', re.I)
 
 
 def sanitize_telegram_html(text: str) -> str:
@@ -102,6 +122,36 @@ def sanitize_telegram_html(text: str) -> str:
                 else:
                     # bad href — skip tag
                     pass
+            pos = m.end()
+            continue
+        if name == "tg-emoji":
+            if raw.startswith("</"):
+                out.append("</tg-emoji>")
+            else:
+                em = _EMOJI_OPEN_RE.match(raw)
+                if em:
+                    out.append(f'<tg-emoji emoji-id="{em.group(2)}">')
+            pos = m.end()
+            continue
+        if name == "span":
+            if raw.startswith("</"):
+                out.append("</span>")
+            else:
+                if _SPAN_OPEN_RE.match(raw):
+                    out.append('<span class="tg-spoiler">')
+            pos = m.end()
+            continue
+        if name == "blockquote":
+            if raw.startswith("</"):
+                out.append("</blockquote>")
+            else:
+                bm = _BQ_OPEN_RE.match(raw)
+                if bm:
+                    out.append("<blockquote expandable>" if bm.group(1) else "<blockquote>")
+            pos = m.end()
+            continue
+        if name == "tg-spoiler":
+            out.append("</tg-spoiler>" if raw.startswith("</") else "<tg-spoiler>")
             pos = m.end()
             continue
         # normalize aliases to Telegram's preferred short tags

@@ -47,6 +47,11 @@ label{display:block;margin-top:12px;color:var(--muted);font-size:12px}
 .tgbar{display:flex;flex-wrap:wrap;gap:4px;margin-top:8px}
 .tgbar button{flex:0 0 auto;padding:7px 9px;font-size:12px;border-radius:10px;background:#171c26;color:var(--gold2);border:1px solid var(--line);font-weight:650;min-width:34px}
 .hint{font-size:11px;color:var(--muted);margin-top:6px;line-height:1.5}
+.pack-hint{font-size:11px;color:var(--muted);margin:8px 0 0;line-height:1.55}
+.phbar,.emobar{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px}
+.phbar button,.emobar button{flex:0 0 auto;padding:6px 8px;font-size:11px;border-radius:10px;background:#121722;color:var(--muted);border:1px solid var(--line);font-weight:600}
+.phbar button{color:var(--gold2)}
+.emobar select{flex:1;min-width:140px;margin-top:0;padding:8px 10px;font-size:12px;border-radius:10px}
 .divider{height:1px;background:var(--line);margin:14px 0}
 </style></head><body>
 <div class="wrap">
@@ -98,22 +103,24 @@ label{display:block;margin-top:12px;color:var(--muted);font-size:12px}
 
 <div class="adm-sec" id="asec-card">
 <div class="card"><h2 class="sec">卡片模板</h2>
-<p class="sub">占位符：{品牌} {机器人} {姓名} {账号} {ID} {正文} {查询词} {有效期}。静态文案可用 Telegram HTML：b/i/u/s/code/pre/a；用户字段会自动转义。</p>
+<p class="sub">占位符：{品牌} {机器人} {姓名} {账号} {ID} {正文} {查询词} {有效期}。静态文案可用 Telegram HTML（工具栏一键插入）；用户字段会自动转义。</p>
 <div class="btns">
 <button class="ghost" type="button" onclick="cardPack('official')">标准包</button>
 <button class="ghost" type="button" onclick="cardPack('brief')">简报包</button>
 <button class="ghost" type="button" onclick="cardPack('pass')">证件包</button>
 </div>
+<p class="pack-hint">以上三项是<strong>版式预设</strong>（布局模板），不是会员档位；点选后写入下方三个文本框，可再微调保存。</p>
 <label>已登记卡</label>
-<div class="tgbar" data-for="ctpaid"></div>
+<div class="tgbar" data-for="ctpaid" data-ph="card"></div>
 <textarea id="ctpaid" maxlength="2500"></textarea>
 <label>未登记卡</label>
-<div class="tgbar" data-for="ctunpaid"></div>
+<div class="tgbar" data-for="ctunpaid" data-ph="card"></div>
 <textarea id="ctunpaid" maxlength="2500"></textarea>
 <label>出具方卡</label>
-<div class="tgbar" data-for="ctissuer"></div>
+<div class="tgbar" data-for="ctissuer" data-ph="card"></div>
 <textarea id="ctissuer" maxlength="2500"></textarea>
-<p class="hint">工具栏只插入 Telegram 允许的标签。保存后请重新查询一张卡核对；旧消息不会自动换文案。</p>
+<p class="hint">工具栏：粗体/斜体/下划线/删除线/代码/代码块/链接/引用/可展开/遮罩；可插入占位符与自定义表情（&lt;tg-emoji&gt;，可粘贴 emoji-id）。保存后请重新查询一张卡核对；旧消息不会自动换文案。</p>
+<p class="hint">自定义表情说明：机器人通常需绑定 Fragment 购买的用户名，自定义表情才会以动画渲染；否则客户端只显示后备 Unicode 表情。</p>
 <div class="btns"><button id="btnsavecard" onclick="saveCardTpl()" disabled>保存模板</button></div>
 </div>
 </div>
@@ -122,13 +129,13 @@ label{display:block;margin-top:12px;color:var(--muted);font-size:12px}
 <div class="card"><h2 class="sec">首页文案</h2>
 <label>标题（可空，空则用机器人名）</label><input id="htitle" maxlength="40" />
 <label>未开通介绍</label>
-<div class="tgbar" data-for="hbody0"></div>
+<div class="tgbar" data-for="hbody0" data-ph="home"></div>
 <textarea id="hbody0" maxlength="500"></textarea>
 <label>已开通介绍</label>
-<div class="tgbar" data-for="hbody1"></div>
+<div class="tgbar" data-for="hbody1" data-ph="home"></div>
 <textarea id="hbody1" maxlength="500"></textarea>
 <label>使用说明</label>
-<div class="tgbar" data-for="hhelp"></div>
+<div class="tgbar" data-for="hhelp" data-ph="home"></div>
 <textarea id="hhelp" maxlength="800"></textarea>
 <label>按钮1</label><input id="hb1" /><select id="ha1"><option value="mini">打开小程序</option><option value="lookup">机器人查询</option><option value="help">发送说明</option></select>
 <label>按钮2</label><input id="hb2" /><select id="ha2"><option value="mini">打开小程序</option><option value="lookup">机器人查询</option><option value="help">发送说明</option></select>
@@ -177,5 +184,5 @@ label{display:block;margin-top:12px;color:var(--muted);font-size:12px}
 <button id="n3" onclick="tab('me')">我的</button>
 <button id="n4" class="hidden" onclick="tab('adm')">管理</button>
 </div>
-<script src="/mini.js?v=9"></script>
+<script src="/mini.js?v=10"></script>
 </body></html>
