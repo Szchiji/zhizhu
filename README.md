@@ -67,3 +67,13 @@ pytest -q
 - 用户列表 / 订单列表要搜才出
 - 首页文案保存后重新 `/start`
 - USDT 确认密钥未配置时确认接口会 503
+
+## Wave 3 — Growth / white-label
+
+- **Public plans**: `GET /api/mini/plans` (no admin) returns the membership plan list.
+- **Coupons**: tables `coupons` / `coupon_redemptions` (Alembic `a1b2c3d4e5f6`).
+  - Admin: `GET/POST /api/mini/admin/coupons`
+  - User redeem: `POST /api/mini/coupon/redeem` with `{"code":"..."}`.
+- **Clone bot**: paid users paste a BotFather token into the platform bot when clone is enabled.
+  Server encrypts `Tenant.bot_token_enc`, then `setWebhook` to `{WEBHOOK_BASE_URL}/wh/t/{tenant_id}`.
+  Requires `WEBHOOK_BASE_URL`, `WEBHOOK_SECRET`, `TOKEN_ENC_KEY`.

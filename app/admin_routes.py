@@ -15,3 +15,6 @@ def mount_admin(app):
     from app.wave2_pending import mount_wave2_pending
 
     mount_wave2_pending(app)
+    from app.coupons import mount_wave3
+
+    mount_wave3(app)
