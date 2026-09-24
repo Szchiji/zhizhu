@@ -49,5 +49,8 @@ def test_confirm_helper_in_mini_confirm():
     assert "confirmAct" in text
     assert "user_delete" in text
     assert "确认改价" in text or "保存套餐" in text
-    html = Path("app/templates/mini.html").read_text(encoding="utf-8")
-    assert "mini-confirm.js?v=13" in html
+    main = Path("app/main.py").read_text(encoding="utf-8")
+    assert "render_mini_html" in main
+    render = Path("app/mini_render.py").read_text(encoding="utf-8")
+    assert "mini-confirm.js?v=13" in render
+    assert "?v=12" in render and "?v=13" in render
