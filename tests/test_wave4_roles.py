@@ -42,10 +42,12 @@ def test_settings_role_override():
         db.close()
 
 
-def test_confirm_helper_in_mini_core():
+def test_confirm_helper_in_mini_confirm():
     from pathlib import Path
 
-    text = Path("app/templates/mini-core.js").read_text(encoding="utf-8")
-    assert "function confirmAct" in text
+    text = Path("app/templates/mini-confirm.js").read_text(encoding="utf-8")
+    assert "confirmAct" in text
     assert "user_delete" in text
     assert "确认改价" in text or "保存套餐" in text
+    html = Path("app/templates/mini.html").read_text(encoding="utf-8")
+    assert "mini-confirm.js?v=13" in html

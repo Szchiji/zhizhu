@@ -14,6 +14,7 @@ from app.tg_webapp import require_webapp_user
 JS_PATH = Path(__file__).resolve().parent / "templates" / "mini.js"
 JS_CORE = Path(__file__).resolve().parent / "templates" / "mini-core.js"
 JS_UI = Path(__file__).resolve().parent / "templates" / "mini-ui.js"
+JS_CONFIRM = Path(__file__).resolve().parent / "templates" / "mini-confirm.js"
 
 
 def _admin(body=None, user_id: int = 0, init_data: str = "") -> int:
@@ -41,6 +42,12 @@ def mount_card_admin(app) -> None:
         if JS_UI.exists():
             return FileResponse(JS_UI, media_type="text/javascript; charset=utf-8")
         return Response("console.error('mini-ui.js missing')", media_type="text/javascript")
+
+    @app.get("/mini-confirm.js")
+    async def mini_confirm_js():
+        if JS_CONFIRM.exists():
+            return FileResponse(JS_CONFIRM, media_type="text/javascript; charset=utf-8")
+        return Response("console.error('mini-confirm.js missing')", media_type="text/javascript")
 
     @app.get("/api/mini/admin/card")
     async def get_card(user_id: int = 0, init_data: str = ""):
