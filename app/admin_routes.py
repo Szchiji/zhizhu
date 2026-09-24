@@ -21,3 +21,6 @@ def mount_admin(app):
     from app.admin_roles_mount import mount_wave4
 
     mount_wave4(app)
+    from app.wave5_onboarding import mount_wave5
+
+    mount_wave5(app)

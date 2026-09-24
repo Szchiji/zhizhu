@@ -15,6 +15,7 @@ JS_PATH = Path(__file__).resolve().parent / "templates" / "mini.js"
 JS_CORE = Path(__file__).resolve().parent / "templates" / "mini-core.js"
 JS_UI = Path(__file__).resolve().parent / "templates" / "mini-ui.js"
 JS_CONFIRM = Path(__file__).resolve().parent / "templates" / "mini-confirm.js"
+JS_ONBOARD = Path(__file__).resolve().parent / "templates" / "mini-onboard.js"
 
 
 def _admin(body=None, user_id: int = 0, init_data: str = "") -> int:
@@ -48,6 +49,12 @@ def mount_card_admin(app) -> None:
         if JS_CONFIRM.exists():
             return FileResponse(JS_CONFIRM, media_type="text/javascript; charset=utf-8")
         return Response("console.error('mini-confirm.js missing')", media_type="text/javascript")
+
+    @app.get("/mini-onboard.js")
+    async def mini_onboard_js():
+        if JS_ONBOARD.exists():
+            return FileResponse(JS_ONBOARD, media_type="text/javascript; charset=utf-8")
+        return Response("console.error('mini-onboard.js missing')", media_type="text/javascript")
 
     @app.get("/api/mini/admin/card")
     async def get_card(user_id: int = 0, init_data: str = ""):
