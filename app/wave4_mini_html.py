@@ -6,6 +6,8 @@ import logging
 from fastapi import Request
 from fastapi.responses import HTMLResponse
 
+from app.static_ver import MINI_ASSET_VER
+
 log = logging.getLogger("zhizhu.wave4_mini")
 
 
@@ -20,11 +22,16 @@ def install_mini_html_middleware(app) -> None:
             async for chunk in response.body_iterator:
                 body += chunk
             html = body.decode("utf-8", errors="replace")
-            html = html.replace("?v=12", "?v=13")
+            html = html.replace("?v=12", f"?v={MINI_ASSET_VER}")
             if "mini-confirm.js" not in html:
                 html = html.replace(
                     "</body>",
-                    '<script src="/mini-confirm.js?v=13"></script></body>',
+                    f'<script src="/mini-confirm.js?v={MINI_ASSET_VER}"></script></body>',
+                )
+            if "mini-onboard.js" not in html:
+                html = html.replace(
+                    "</body>",
+                    f'<script src="/mini-onboard.js?v={MINI_ASSET_VER}"></script></body>',
                 )
             return HTMLResponse(
                 html,
