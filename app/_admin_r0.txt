@@ -1,1 +1,119 @@
-PLACEHOLDER
+from __future__ import annotations
+
+from datetime import timedelta
+
+import logging
+
+from fastapi import HTTPException, Request
+from fastapi.responses import JSONResponse
+from sqlalchemy import or_, select
+
+from app.access import get_bot, normalize_channel
+from app.admin_ops import mount_admin_ops
+from app.bot_avatar import router as avatar_router
+from app.card_admin import mount_card_admin
+from app.config import ADMIN_TG_IDS, USDT_ADDRESS
+from app.db import get_session
+from app.home import load_home, save_home
+from app.models import Identity, Order, Tenant, utcnow
+from app.notify import notify_admins_activation
+from app.plans import clone_on, list_plans, plan_info, plan_stars, plan_usdt, price_board, save_plan_defs, set_clone, set_plan_price
+from app.services import activate_order, add_admin_audit, add_event, fmt_until, get_or_create_tenant, get_setting, open_order, parse_username, set_setting
+from app.tg_webapp import require_webapp_user
+
+log = logging.getLogger("zhizhu.admin_api")
+
+def _uid(body: dict | None = None, user_id: int = 0, init_data: str = "") -> int:
+    """Identity from verified Telegram WebApp init_data only (ignores bare user_id)."""
+    del user_id  # never trust client-supplied user_id as proof of identity
+    return require_webapp_user(init_data=init_data, body=body)
+
+def _admin_id(body: dict | None = None, user_id: int = 0, init_data: str = "") -> int:
+    uid = _uid(body, user_id, init_data)
+    if uid not in ADMIN_TG_IDS:
+        return 0
+    return uid
+
+def _dump_user(tenant: Tenant) -> dict:
+    ident = tenant.identity
+    return {
+        "tenant_id": tenant.id,
+        "tg_id": tenant.owner_tg_id,
+        "status": tenant.status,
+        "plan": tenant.plan,
+        "paid_until": fmt_until(tenant.paid_until) if tenant.paid_until else "",
+        "username": ident.username if ident else "",
+        "display_name": ident.display_name if ident else "",
+        "official_user_id": ident.official_user_id if ident else None,
+    }
+
+def _days(body) -> int:
+    try:
+        days = int(float(body.get("days") or 365))
+    except (TypeError, ValueError):
+        days = 365
+    return max(1, min(days, 3650))
+
+def mount_admin(app) -> None:
+    app.include_router(avatar_router)
+    mount_card_admin(app)
+    mount_admin_ops(app)
+
+    @app.post("/api/mini/cancel")
+    async def mini_cancel(request: Request):
+        body = await request.json()
+        uid = _uid(body)
+        if not uid:
+            return JSONResponse({"error": "未登录"}, status_code=401)
+        db = get_session()
+        try:
+            tenant = get_or_create_tenant(db, uid)
+            code = str(body.get("code") or "").upper()
+            order = None
+            if code:
+                order = db.scalar(select(Order).where(Order.public_code == code, Order.tenant_id == tenant.id))
+            if not order:
+                order = open_order(db, tenant.id)
+            if not order or order.status not in {"pending", "confirming", "draft"}:
+                return JSONResponse({"error": "没有可取消的订单"}, status_code=400)
+            add_event(db, order, "canceled", "user_cancel")
+            db.commit()
+            return {"ok": True, "code": order.public_code}
+        finally:
+            db.close()
+
+    @app.get("/api/mini/admin")
+    async def admin_board(user_id: int = 0, init_data: str = ""):
+        if not _admin_id(user_id=user_id, init_data=init_data):
+            return JSONResponse({"error": "仅管理员"}, status_code=403)
+        db = get_session()
+        try:
+            pending = []
+            for o in db.scalars(
+                select(Order).where(Order.rail == "usdt", Order.status.in_(("pending", "confirming"))).limit(30)
+            ):
+                pending.append({"code": o.public_code, "amount": f"{float(o.amount):g}", "status": o.status, "txid": o.txid or ""})
+            orders = []
+            for o in db.scalars(select(Order).order_by(Order.id.desc()).limit(20)):
+                tenant = db.get(Tenant, o.tenant_id)
+                orders.append({
+                    "code": o.public_code,
+                    "rail": o.rail,
+                    "amount": f"{float(o.amount):g}",
+                    "status": o.status,
+                    "tg_id": tenant.owner_tg_id if tenant else None,
+                    "txid": o.txid or "",
+                })
+            plans = list_plans(db)
+            return {
+                "ok": True,
+                "board": price_board(db),
+                "plans": plans,
+                "stars": plan_stars(db, "year"),
+                "usdt": f"{plan_usdt(db, 'year'):g}",
+                "address": get_setting(db, "usdt_address", USDT_ADDRESS),
+                "clone": clone_on(db),
+                "pending": pending,
+                "orders": orders,
+                "remind_enabled": get_setting(db, "remind_enabled", "1"),
+                "remind_days": get_setting(db, "remind_days", "7"),
