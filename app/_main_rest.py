@@ -60,8 +60,6 @@ async def mini_order(request: Request):
     uid = _uid(body)
     key = str(body.get("plan") or "year")
     rail = str(body.get("rail") or "stars")
-    if key not in PLANS:
-        key = "year"
     if not uid:
         raise HTTPException(400, detail="bad user")
     blocked = await deny_json(uid)
@@ -71,6 +69,8 @@ async def mini_order(request: Request):
         raise HTTPException(503, detail="bot not ready")
     db = get_session()
     try:
+        key = ensure_plan_key(db, key)
+        meta = plan_info(db, key)
         tenant = get_or_create_tenant(db, uid)
         info = user_from_init(str(body.get("init_data") or ""))
         save_paid_profile(
@@ -95,7 +95,7 @@ async def mini_order(request: Request):
                     tenant_id=tenant.id,
                     rail="usdt",
                     plan=key,
-                    period_days=PLANS[key]["days"],
+                    period_days=meta["days"],
                     amount=amount,
                     currency="USDT",
                     chain=USDT_CHAIN,
@@ -120,7 +120,7 @@ async def mini_order(request: Request):
                 tenant_id=tenant.id,
                 rail="stars",
                 plan=key,
-                period_days=PLANS[key]["days"],
+                period_days=meta["days"],
                 amount=price,
                 currency="XTR",
                 status="pending",
@@ -133,12 +133,12 @@ async def mini_order(request: Request):
             r = await client.post(
                 f"https://api.telegram.org/bot{PLATFORM_BOT_TOKEN}/createInvoiceLink",
                 json={
-                    "title": f"平台登记·{PLANS[key]['label']}",
+                    "title": f"平台登记·{meta['label']}",
                     "description": "开通后可保存平台登记资料",
                     "payload": payload,
                     "provider_token": "",
                     "currency": "XTR",
-                    "prices": [{"label": PLANS[key]["label"], "amount": price}],
+                    "prices": [{"label": meta["label"], "amount": price}],
                 },
             )
             data = r.json()
