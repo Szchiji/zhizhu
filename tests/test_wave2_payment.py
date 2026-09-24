@@ -154,7 +154,7 @@ def test_mini_me_includes_pending(monkeypatch):
         monkeypatch.setattr(main, "_uid", lambda *a, **k: 77)
 
     with TestClient(main.app) as client:
-        r = client.get("/api/mini/me", params={"init_data": "x", "user_id": 77})
+        r = client.get("/api/mini/pending", params={"init_data": "x", "user_id": 77})
         assert r.status_code == 200, r.text
         data = r.json()
         assert data.get("pending"), data
