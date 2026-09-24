@@ -56,6 +56,7 @@ PATH_CAP: dict[str, str] = {
     "/api/mini/admin/reconcile": "reconcile",
     "/api/mini/admin/coupons": "coupon",
     "/api/mini/admin/export": "export",
+    "/api/mini/admin/settings/export": "export",
     "/api/mini/admin/audits": "view",
     "/api/mini/admin/roles": "view",
 }
