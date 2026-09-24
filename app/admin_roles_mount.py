@@ -60,6 +60,9 @@ def _install_admin_id_patches() -> None:
 
 def mount_wave4(app) -> None:
     _install_admin_id_patches()
+    from app.wave4_mini_html import install_mini_html_middleware
+
+    install_mini_html_middleware(app)
 
     @app.middleware("http")
     async def wave4_me_is_admin(request: Request, call_next):
