@@ -1,7 +1,7 @@
     amount = unique_usdt_amount(db, plan_usdt(db, key))
-    db.add(Order(public_code=code, tenant_id=tenant.id, rail='usdt', plan=key, period_days=PLANS[key]['days'], amount=amount, currency='USDT', chain=USDT_CHAIN, pay_address=addr, status='pending', expires_at=utcnow() + timedelta(minutes=20)))
+    db.add(Order(public_code=code, tenant_id=tenant.id, rail='usdt', plan=key, period_days=meta['days'], amount=amount, currency='USDT', chain=USDT_CHAIN, pay_address=addr, status='pending', expires_at=utcnow() + timedelta(minutes=20)))
     db.commit()
-    await message.reply_text(f"{PLANS[key]['label']}  {amount:g} USDT\n订单 {code}\n20 分钟内有效")
+    await message.reply_text(f"{meta['label']}  {amount:g} USDT\n订单 {code}\n20 分钟内有效")
 
 
 async def on_webapp(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
