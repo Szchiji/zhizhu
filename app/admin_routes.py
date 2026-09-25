@@ -39,3 +39,6 @@ def mount_admin(app):
     from app.wave10_assets import mount_wave10
 
     mount_wave10(app)
+    from app.inline_tpl_admin import mount_inline_tpl_admin
+
+    mount_inline_tpl_admin(app)

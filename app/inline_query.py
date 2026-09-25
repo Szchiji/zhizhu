@@ -11,6 +11,7 @@ from app.config import PUBLIC_BASE_URL, WEBHOOK_BASE_URL
 from app.db import get_session
 from app.services import parse_username, resolve_paid_identity
 from app.card_tpl import parse_mode_for
+from app import inline_tpl
 from app.verify import PARSE_MODE, card_kb, card_text, issuer_kb, issuer_text, is_platform_bot, promo_text
 
 log = logging.getLogger("zhizhu.inline")
@@ -73,17 +74,23 @@ async def on_inline(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     brand = brand_name() or "平台登记"
     raw = (q.query or "").strip()
     name = parse_username(raw) or raw.lstrip("@").split()[0] if raw else ""
-    title = f"查询 @{name}" if name else f"{brand}·平台登记"
-    desc = "点击发送登记卡" if name else "输入用户名查询"
     markup = card_kb(username=name, bot_username=bot_name)
     body = ""
     mode = PARSE_MODE
+    kind = "unpaid"
+    extra = {
+        "品牌": brand,
+        "机器人": bot_name,
+        "查询词": name or "",
+        "账号": f"@{name}" if name else "",
+        "姓名": "",
+        "ID": "—",
+    }
     db = get_session()
     try:
         mode = parse_mode_for(db) or PARSE_MODE
         if name and is_platform_bot(name, context.bot.username or bot_name):
-            title = f"🛡️ {brand} 平台出具方"
-            desc = "本账号为平台登记机器人"
+            kind = "issuer"
             body = issuer_text(bot_name, db=db)
             markup = issuer_kb(bot_name)
         else:
@@ -92,12 +99,17 @@ async def on_inline(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                 ident = await resolve_paid_identity(db, name, context.bot) if name else None
                 if ident:
                     name = ident.username or name
-                    title = f"✅ @{name} 平台登记"
-                    desc = f"{ident.display_name or ''} · ID {ident.official_user_id or '—'}".strip(" ·")
+                    kind = "paid"
+                    extra["查询词"] = name or ""
+                    extra["账号"] = f"@{name}" if name else ""
+                    extra["姓名"] = ident.display_name or ""
+                    extra["ID"] = ident.official_user_id or "—"
                     body = card_text(ident, bot_username=bot_name, db=db)
                     markup = card_kb(ident, bot_username=bot_name)
             except Exception:
                 log.exception("inline resolve")
+        title = inline_tpl.render(kind, "title", extra, db=db)
+        desc = inline_tpl.render(kind, "description", extra, db=db)
     finally:
         db.close()
     item = _article(
