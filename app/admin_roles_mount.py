@@ -47,6 +47,7 @@ def _install_admin_id_patches() -> None:
         "app.coupons",
         "app.saas_clones",
         "app.fx_rate",
+        "app.inline_tpl_admin",
     ]
     for modname in targets:
         try:
