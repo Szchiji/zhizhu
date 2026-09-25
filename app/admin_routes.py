@@ -33,3 +33,6 @@ def mount_admin(app):
     from app.wave9_revoke_stars import mount_wave9_revoke
 
     mount_wave9_revoke(app)
+    from app.wave9_assets import mount_wave9_assets
+
+    mount_wave9_assets(app)
