@@ -19,31 +19,33 @@ def test_mini_asset_ver_bumped():
     assert MINI_ASSET_VER >= 16
 
 
-def test_roles_js_file_and_endpoints():
+def test_roles_and_reconcile_js_files():
     root = Path(__file__).resolve().parents[1] / "app" / "templates"
     assert (root / "mini-roles.js").is_file()
-    text = (root / "mini-roles.js").read_text(encoding="utf-8")
-    assert "/api/mini/admin/roles" in text
-    assert "/api/mini/admin/reconcile" in text
-    assert "ensureRolesAdmin" in text
-    assert "ensureReconcileAdmin" in text
-    assert "gateAdminNav" in text
-    assert "角色" in text
-    assert "对账" in text
+    assert (root / "mini-reconcile.js").is_file()
+    roles = (root / "mini-roles.js").read_text(encoding="utf-8")
+    rec = (root / "mini-reconcile.js").read_text(encoding="utf-8")
+    assert "/api/mini/admin/roles" in roles
+    assert "ensureRolesAdmin" in roles
+    assert "gateAdminNav" in roles
+    assert "角色" in roles
+    assert "/api/mini/admin/reconcile" in rec
+    assert "ensureReconcileAdmin" in rec
+    assert "对账" in rec
 
 
-def test_static_roles_js_route():
+def test_static_js_routes():
     import app.main as main
 
     with TestClient(main.app) as client:
-        r = client.get("/mini-roles.js")
-        assert r.status_code == 200
-        assert "javascript" in r.headers.get("content-type", "")
-        assert "ensureRolesAdmin" in r.text
-        assert len(r.text) > 200
+        for path in ("/mini-roles.js", "/mini-reconcile.js"):
+            r = client.get(path)
+            assert r.status_code == 200, path
+            assert "javascript" in r.headers.get("content-type", "")
+            assert len(r.text) > 100
 
 
-def test_mini_html_injects_roles_script():
+def test_mini_html_injects_wave8_scripts():
     import app.main as main
 
     with TestClient(main.app) as client:
@@ -51,10 +53,11 @@ def test_mini_html_injects_roles_script():
         if r.status_code != 200:
             src = Path(__file__).resolve().parents[1] / "app" / "wave4_mini_html.py"
             text = src.read_text(encoding="utf-8")
-            assert "mini-roles.js" in text
+            assert "mini-roles.js" in text and "mini-reconcile.js" in text
             return
         body = r.text
         assert f"mini-roles.js?v={MINI_ASSET_VER}" in body
+        assert f"mini-reconcile.js?v={MINI_ASSET_VER}" in body
 
 
 def test_roles_api_list_and_set(monkeypatch):
@@ -67,7 +70,6 @@ def test_roles_api_list_and_set(monkeypatch):
     monkeypatch.setattr(cfg, "ADMIN_TG_IDS", {owner})
     monkeypatch.setattr(ar, "ADMIN_TG_IDS", {owner})
     monkeypatch.setattr(arm, "ADMIN_TG_IDS", {owner})
-    # _uid imports require_webapp_user by value — patch the bound helpers
     monkeypatch.setattr(ar, "_uid", lambda **kw: owner)
     monkeypatch.setattr(arm, "_uid", lambda **kw: owner)
 
