@@ -16,6 +16,8 @@ JS_CORE = Path(__file__).resolve().parent / "templates" / "mini-core.js"
 JS_UI = Path(__file__).resolve().parent / "templates" / "mini-ui.js"
 JS_CONFIRM = Path(__file__).resolve().parent / "templates" / "mini-confirm.js"
 JS_ONBOARD = Path(__file__).resolve().parent / "templates" / "mini-onboard.js"
+JS_PENDING = Path(__file__).resolve().parent / "templates" / "mini-pending.js"
+JS_OPS = Path(__file__).resolve().parent / "templates" / "mini-ops.js"
 
 
 def _admin(body=None, user_id: int = 0, init_data: str = "") -> int:
@@ -55,6 +57,18 @@ def mount_card_admin(app) -> None:
         if JS_ONBOARD.exists():
             return FileResponse(JS_ONBOARD, media_type="text/javascript; charset=utf-8")
         return Response("console.error('mini-onboard.js missing')", media_type="text/javascript")
+
+    @app.get("/mini-pending.js")
+    async def mini_pending_js():
+        if JS_PENDING.exists():
+            return FileResponse(JS_PENDING, media_type="text/javascript; charset=utf-8")
+        return Response("console.error('mini-pending.js missing')", media_type="text/javascript")
+
+    @app.get("/mini-ops.js")
+    async def mini_ops_js():
+        if JS_OPS.exists():
+            return FileResponse(JS_OPS, media_type="text/javascript; charset=utf-8")
+        return Response("console.error('mini-ops.js missing')", media_type="text/javascript")
 
     @app.get("/api/mini/admin/card")
     async def get_card(user_id: int = 0, init_data: str = ""):
