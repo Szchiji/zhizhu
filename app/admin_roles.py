@@ -59,6 +59,8 @@ PATH_CAP: dict[str, str] = {
     "/api/mini/admin/settings/export": "export",
     "/api/mini/admin/audits": "view",
     "/api/mini/admin/roles": "view",
+    "/api/mini/admin/clones": "clone",
+    "/api/mini/admin/fx_rate": "price",
 }
 
 _admin_rl = SlidingWindowLimiter()

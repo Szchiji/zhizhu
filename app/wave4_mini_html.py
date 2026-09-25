@@ -68,6 +68,11 @@ def install_mini_html_middleware(app) -> None:
                     "</body>",
                     f'<script src="/mini-ops-stars.js?v={MINI_ASSET_VER}"></script></body>',
                 )
+            if "mini-saas.js" not in html:
+                html = html.replace(
+                    "</body>",
+                    f'<script src="/mini-saas.js?v={MINI_ASSET_VER}"></script></body>',
+                )
             return HTMLResponse(
                 html,
                 status_code=200,
