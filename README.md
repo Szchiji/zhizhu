@@ -97,3 +97,10 @@ pytest -q
 - `/healthz`: `{ok, db, redis, usdt_watch}` (Redis optional; USDT last-check age when watcher ran)
 - Settings backup: `GET /api/mini/admin/settings/export` (secrets redacted)
 - Coupons / clone / multi-plan / REDIS_URL: see `.env.example` and Wave 3 section above
+
+## Wave 10 — SaaS MVP (clone instances)
+
+- Admin mini：**克隆实例** — list bound clone bots, membership read-only, enable/disable Webhook.
+- Setting `clone_disabled_ids` (JSON int list); docs: `docs/WHITE_LABEL.md`.
+- Still: Tenant = membership + optional clone. No reseller / Stripe / custom domains.
+
