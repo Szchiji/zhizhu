@@ -30,3 +30,6 @@ def mount_admin(app):
     from app.fx_rate import mount_fx_rate
 
     mount_fx_rate(app)
+    from app.wave9_revoke_stars import mount_wave9_revoke
+
+    mount_wave9_revoke(app)
