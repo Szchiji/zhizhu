@@ -27,3 +27,6 @@ def mount_admin(app):
     from app.wave6_settings_export import mount_wave6
 
     mount_wave6(app)
+    from app.fx_rate import mount_fx_rate
+
+    mount_fx_rate(app)

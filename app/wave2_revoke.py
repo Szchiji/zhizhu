@@ -10,7 +10,8 @@ from app.models import Order, OrderEvent, Tenant, utcnow
 def revoke_order(db: Session, order: Order, *, reason: str = "admin_revoke") -> Tenant:
     """Mark order refunded/revoked and pull back entitlement days when possible.
 
-    Does not call Telegram Stars refund API — internal bookkeeping only.
+    Internal bookkeeping only. Stars official refund is handled by
+    app.stars_refund.refund_stars_for_order (called from admin revoke).
     """
     tenant = db.get(Tenant, order.tenant_id)
     if order.status in {"refunded", "revoked"}:
