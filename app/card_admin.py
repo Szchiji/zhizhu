@@ -19,6 +19,7 @@ JS_ONBOARD = Path(__file__).resolve().parent / "templates" / "mini-onboard.js"
 JS_PENDING = Path(__file__).resolve().parent / "templates" / "mini-pending.js"
 JS_OPS = Path(__file__).resolve().parent / "templates" / "mini-ops.js"
 JS_ROLES = Path(__file__).resolve().parent / "templates" / "mini-roles.js"
+JS_RECONCILE = Path(__file__).resolve().parent / "templates" / "mini-reconcile.js"
 
 
 def _admin(body=None, user_id: int = 0, init_data: str = "") -> int:
@@ -76,6 +77,12 @@ def mount_card_admin(app) -> None:
         if JS_ROLES.exists():
             return FileResponse(JS_ROLES, media_type="text/javascript; charset=utf-8")
         return Response("console.error('mini-roles.js missing')", media_type="text/javascript")
+
+    @app.get("/mini-reconcile.js")
+    async def mini_reconcile_js():
+        if JS_RECONCILE.exists():
+            return FileResponse(JS_RECONCILE, media_type="text/javascript; charset=utf-8")
+        return Response("console.error('mini-reconcile.js missing')", media_type="text/javascript")
 
     @app.get("/api/mini/admin/card")
     async def get_card(user_id: int = 0, init_data: str = ""):
