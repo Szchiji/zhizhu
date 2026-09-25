@@ -58,6 +58,16 @@ def install_mini_html_middleware(app) -> None:
                     "</body>",
                     f'<script src="/mini-fx.js?v={MINI_ASSET_VER}"></script></body>',
                 )
+            if "mini-reconcile-actions.js" not in html:
+                html = html.replace(
+                    "</body>",
+                    f'<script src="/mini-reconcile-actions.js?v={MINI_ASSET_VER}"></script></body>',
+                )
+            if "mini-ops-stars.js" not in html:
+                html = html.replace(
+                    "</body>",
+                    f'<script src="/mini-ops-stars.js?v={MINI_ASSET_VER}"></script></body>',
+                )
             return HTMLResponse(
                 html,
                 status_code=200,

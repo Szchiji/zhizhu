@@ -1,24 +1,27 @@
-"""Wave9: serve mini-fx.js (and keep reconcile/ops already served by card_admin)."""
+"""Wave9: serve mini-fx / reconcile-actions / ops-stars JS."""
 from __future__ import annotations
 
 from pathlib import Path
 
 from fastapi.responses import FileResponse, Response
 
-JS_FX = Path(__file__).resolve().parent / "templates" / "mini-fx.js"
-JS_RECONCILE = Path(__file__).resolve().parent / "templates" / "mini-reconcile.js"
+T = Path(__file__).resolve().parent / "templates"
+FILES = {
+    "/mini-fx.js": T / "mini-fx.js",
+    "/mini-reconcile-actions.js": T / "mini-reconcile-actions.js",
+    "/mini-ops-stars.js": T / "mini-ops-stars.js",
+}
 
 
 def mount_wave9_assets(app) -> None:
-    @app.get("/mini-fx.js")
-    async def mini_fx_js():
-        if JS_FX.exists():
-            return FileResponse(JS_FX, media_type="text/javascript; charset=utf-8")
-        return Response("console.error('mini-fx.js missing')", media_type="text/javascript")
+    for route, path in FILES.items():
 
-    # Re-bind reconcile in case older deploy missed card_admin route (idempotent path).
-    @app.get("/mini-reconcile.js")
-    async def mini_reconcile_js_wave9():
-        if JS_RECONCILE.exists():
-            return FileResponse(JS_RECONCILE, media_type="text/javascript; charset=utf-8")
-        return Response("console.error('mini-reconcile.js missing')", media_type="text/javascript")
+        def _make(p=path, r=route):
+            async def _serve():
+                if p.exists():
+                    return FileResponse(p, media_type="text/javascript; charset=utf-8")
+                return Response(f"console.error('{r} missing')", media_type="text/javascript")
+
+            return _serve
+
+        app.add_api_route(route, _make(), methods=["GET"])
