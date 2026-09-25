@@ -45,6 +45,8 @@ def _install_admin_id_patches() -> None:
         "app.admin_ops",
         "app.card_admin",
         "app.coupons",
+        "app.saas_clones",
+        "app.fx_rate",
     ]
     for modname in targets:
         try:
@@ -178,7 +180,6 @@ def mount_wave4(app) -> None:
             if not _public_rl.allow(f"pub:{client}:{path}", limit=90, window_sec=60):
                 return JSONResponse({"error": "请求过快，请稍后再试"}, status_code=429)
 
-        # Capability gate for admin mutators / sensitive GETs
         need_cap = None
         body_bytes = b""
         if path == "/api/mini/admin" and request.method == "POST":

@@ -36,3 +36,6 @@ def mount_admin(app):
     from app.wave9_assets import mount_wave9_assets
 
     mount_wave9_assets(app)
+    from app.wave10_assets import mount_wave10
+
+    mount_wave10(app)

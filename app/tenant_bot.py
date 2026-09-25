@@ -10,6 +10,22 @@ from app.verify import PARSE_MODE, alert_text, card_kb, card_text, extract_forwa
 
 
 async def handle_tenant_update(update: Update, tenant: Tenant, bot) -> None:
+    from app.saas_clones import is_clone_disabled
+
+    _db = get_session()
+    try:
+        _disabled = is_clone_disabled(_db, tenant.id)
+    finally:
+        _db.close()
+    if _disabled:
+        if update.effective_message:
+            await update.effective_message.reply_text("克隆实例已由平台停用，请联系管理员。")
+        elif update.callback_query:
+            await update.callback_query.answer("克隆实例已停用", show_alert=True)
+        elif update.inline_query:
+            await update.inline_query.answer([], cache_time=10)
+        return
+
     if not tenant_usable(tenant):
         if update.effective_message:
             await update.effective_message.reply_text(
