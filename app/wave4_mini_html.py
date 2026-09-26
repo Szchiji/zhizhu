@@ -24,7 +24,14 @@ def install_mini_html_middleware(app) -> None:
                 body += chunk
             html = body.decode("utf-8", errors="replace")
             html = html.replace("?v=12", f"?v={MINI_ASSET_VER}")
-            # Self-contained mini-ui payload parts (no CDN) must load before mini-ui.js
+            html = html.replace("?v=21", f"?v={MINI_ASSET_VER}")
+            if "mini-card-api.js" not in html and 'src="/mini-core.js' in html:
+                html = html.replace(
+                    f'<script src="/mini-core.js?v={MINI_ASSET_VER}"></script>',
+                    f'<script src="/mini-card-api.js?v={MINI_ASSET_VER}"></script>'+
+                    f'<script src="/mini-core.js?v={MINI_ASSET_VER}"></script>',
+                    1,
+                )
             if "mini-ui.p0.js" not in html and 'src="/mini-ui.js' in html:
                 parts = "".join(
                     f'<script src="/mini-ui.p{i}.js?v={MINI_ASSET_VER}"></script>'
@@ -36,61 +43,25 @@ def install_mini_html_middleware(app) -> None:
                     1,
                 )
             html = patch_mini_html(html)
-            if "mini-confirm.js" not in html:
-                html = html.replace(
-                    "</body>",
-                    f'<script src="/mini-confirm.js?v={MINI_ASSET_VER}"></script></body>',
-                )
-            if "mini-onboard.js" not in html:
-                html = html.replace(
-                    "</body>",
-                    f'<script src="/mini-onboard.js?v={MINI_ASSET_VER}"></script></body>',
-                )
-            if "mini-pending.js" not in html:
-                html = html.replace(
-                    "</body>",
-                    f'<script src="/mini-pending.js?v={MINI_ASSET_VER}"></script></body>',
-                )
-            if "mini-ops.js" not in html:
-                html = html.replace(
-                    "</body>",
-                    f'<script src="/mini-ops.js?v={MINI_ASSET_VER}"></script></body>',
-                )
-            if "mini-roles.js" not in html:
-                html = html.replace(
-                    "</body>",
-                    f'<script src="/mini-roles.js?v={MINI_ASSET_VER}"></script></body>',
-                )
-            if "mini-reconcile.js" not in html:
-                html = html.replace(
-                    "</body>",
-                    f'<script src="/mini-reconcile.js?v={MINI_ASSET_VER}"></script></body>',
-                )
-            if "mini-fx.js" not in html:
-                html = html.replace(
-                    "</body>",
-                    f'<script src="/mini-fx.js?v={MINI_ASSET_VER}"></script></body>',
-                )
-            if "mini-reconcile-actions.js" not in html:
-                html = html.replace(
-                    "</body>",
-                    f'<script src="/mini-reconcile-actions.js?v={MINI_ASSET_VER}"></script></body>',
-                )
-            if "mini-ops-stars.js" not in html:
-                html = html.replace(
-                    "</body>",
-                    f'<script src="/mini-ops-stars.js?v={MINI_ASSET_VER}"></script></body>',
-                )
-            if "mini-saas.js" not in html:
-                html = html.replace(
-                    "</body>",
-                    f'<script src="/mini-saas.js?v={MINI_ASSET_VER}"></script></body>',
-                )
-            if "mini-inline.js" not in html:
-                html = html.replace(
-                    "</body>",
-                    f'<script src="/mini-inline.js?v={MINI_ASSET_VER}"></script></body>',
-                )
+            extras = (
+                "mini-confirm.js",
+                "mini-onboard.js",
+                "mini-pending.js",
+                "mini-ops.js",
+                "mini-roles.js",
+                "mini-reconcile.js",
+                "mini-fx.js",
+                "mini-reconcile-actions.js",
+                "mini-ops-stars.js",
+                "mini-saas.js",
+                "mini-inline.js",
+            )
+            for name in extras:
+                if name not in html:
+                    html = html.replace(
+                        "</body>",
+                        f'<script src="/{name}?v={MINI_ASSET_VER}"></script></body>',
+                    )
             return HTMLResponse(
                 html,
                 status_code=200,
