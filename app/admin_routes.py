@@ -37,8 +37,10 @@ def mount_admin(app):
 
     mount_wave9_assets(app)
     from app.wave10_assets import mount_wave10
+    from app.wave_card_wysiwyg import mount_card_wysiwyg
 
     mount_wave10(app)
+    mount_card_wysiwyg(app)
     from app.inline_tpl_admin import mount_inline_tpl_admin
 
     mount_inline_tpl_admin(app)

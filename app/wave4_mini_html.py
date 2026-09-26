@@ -7,6 +7,7 @@ from fastapi import Request
 from fastapi.responses import HTMLResponse
 
 from app.static_ver import MINI_ASSET_VER
+from app.wave_card_wysiwyg import patch_mini_html
 
 log = logging.getLogger("zhizhu.wave4_mini")
 
@@ -23,6 +24,7 @@ def install_mini_html_middleware(app) -> None:
                 body += chunk
             html = body.decode("utf-8", errors="replace")
             html = html.replace("?v=12", f"?v={MINI_ASSET_VER}")
+            html = patch_mini_html(html)
             if "mini-confirm.js" not in html:
                 html = html.replace(
                     "</body>",
