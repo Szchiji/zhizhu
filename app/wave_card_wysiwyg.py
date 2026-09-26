@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from fastapi.responses import FileResponse, Response
+from fastapi.responses import Response
 
 from app.static_ver import MINI_ASSET_VER
 
@@ -56,11 +56,21 @@ def patch_mini_html(html: str) -> str:
     return html
 
 
+def _load_wysiwyg_js() -> bytes | None:
+    parts = [T / f"mini-card-wysiwyg.part{i}.js" for i in (1, 2, 3)]
+    if all(p.exists() for p in parts):
+        return b"".join(p.read_bytes() for p in parts)
+    if JS.exists():
+        return JS.read_bytes()
+    return None
+
+
 def mount_card_wysiwyg(app) -> None:
     @app.get("/mini-card-wysiwyg.js")
     async def _serve_card_wysiwyg():
-        if JS.exists():
-            return FileResponse(JS, media_type="text/javascript; charset=utf-8")
+        data = _load_wysiwyg_js()
+        if data is not None:
+            return Response(data, media_type="text/javascript; charset=utf-8")
         return Response(
             "console.error('mini-card-wysiwyg.js missing')",
             media_type="text/javascript",
