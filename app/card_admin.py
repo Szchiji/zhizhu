@@ -48,6 +48,34 @@ def mount_card_admin(app) -> None:
             return FileResponse(JS_UI, media_type="text/javascript; charset=utf-8")
         return Response("console.error('mini-ui.js missing')", media_type="text/javascript")
 
+    @app.get("/mini-ui.p0.js")
+    async def mini_ui_p0_js():
+        p = Path(__file__).resolve().parent / "templates" / "mini-ui.p0.js"
+        if p.exists():
+            return FileResponse(p, media_type="text/javascript; charset=utf-8")
+        return Response("console.error('mini-ui.p0.js missing')", media_type="text/javascript")
+
+    @app.get("/mini-ui.p1.js")
+    async def mini_ui_p1_js():
+        p = Path(__file__).resolve().parent / "templates" / "mini-ui.p1.js"
+        if p.exists():
+            return FileResponse(p, media_type="text/javascript; charset=utf-8")
+        return Response("console.error('mini-ui.p1.js missing')", media_type="text/javascript")
+
+    @app.get("/mini-ui.p2.js")
+    async def mini_ui_p2_js():
+        p = Path(__file__).resolve().parent / "templates" / "mini-ui.p2.js"
+        if p.exists():
+            return FileResponse(p, media_type="text/javascript; charset=utf-8")
+        return Response("console.error('mini-ui.p2.js missing')", media_type="text/javascript")
+
+    @app.get("/mini-ui.p3.js")
+    async def mini_ui_p3_js():
+        p = Path(__file__).resolve().parent / "templates" / "mini-ui.p3.js"
+        if p.exists():
+            return FileResponse(p, media_type="text/javascript; charset=utf-8")
+        return Response("console.error('mini-ui.p3.js missing')", media_type="text/javascript")
+
     @app.get("/mini-confirm.js")
     async def mini_confirm_js():
         if JS_CONFIRM.exists():
