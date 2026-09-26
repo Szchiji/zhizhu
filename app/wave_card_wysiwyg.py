@@ -1,6 +1,8 @@
 """Card template WYSIWYG overlay: serve JS + inject CSS/hints into /mini HTML."""
 from __future__ import annotations
 
+import base64
+import zlib
 from pathlib import Path
 
 from fastapi.responses import Response
@@ -9,6 +11,7 @@ from app.static_ver import MINI_ASSET_VER
 
 T = Path(__file__).resolve().parent / "templates"
 JS = T / "mini-card-wysiwyg.js"
+Z64 = T / "mini-card-wysiwyg.js.z64"
 
 CSS = (
     "textarea.tpl-src{display:none!important}"
@@ -57,6 +60,8 @@ def patch_mini_html(html: str) -> str:
 
 
 def _load_wysiwyg_js() -> bytes | None:
+    if Z64.exists():
+        return zlib.decompress(base64.b64decode(Z64.read_text(encoding="ascii").strip()))
     parts = [T / f"mini-card-wysiwyg.part{i}.js" for i in (1, 2, 3)]
     if all(p.exists() for p in parts):
         return b"".join(p.read_bytes() for p in parts)
