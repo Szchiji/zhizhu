@@ -24,6 +24,17 @@ def install_mini_html_middleware(app) -> None:
                 body += chunk
             html = body.decode("utf-8", errors="replace")
             html = html.replace("?v=12", f"?v={MINI_ASSET_VER}")
+            # Self-contained mini-ui payload parts (no CDN) must load before mini-ui.js
+            if "mini-ui.p0.js" not in html and 'src="/mini-ui.js' in html:
+                parts = "".join(
+                    f'<script src="/mini-ui.p{i}.js?v={MINI_ASSET_VER}"></script>'
+                    for i in range(4)
+                )
+                html = html.replace(
+                    f'<script src="/mini-ui.js?v={MINI_ASSET_VER}"></script>',
+                    parts + f'<script src="/mini-ui.js?v={MINI_ASSET_VER}"></script>',
+                    1,
+                )
             html = patch_mini_html(html)
             if "mini-confirm.js" not in html:
                 html = html.replace(
