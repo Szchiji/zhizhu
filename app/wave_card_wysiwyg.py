@@ -39,6 +39,9 @@ NEW_SUB = '占位符：{品牌} {机器人} {姓名} {账号} {ID} {正文} {查
 
 def patch_mini_html(html: str) -> str:
     """Inject WYSIWYG CSS, hide card textareas, update hints, load overlay JS."""
+    # Inline WYSIWYG already in mini.html + mini-ui.js (syncVisToTa) — skip overlay.
+    if 'id="ctpaid-vis"' in html or "syncVisToTa" in html:
+        return html
     if "mini-card-wysiwyg.js" not in html:
         html = html.replace(
             "</body>",
