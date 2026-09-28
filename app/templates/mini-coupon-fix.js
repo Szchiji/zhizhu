@@ -25,22 +25,23 @@
         body: JSON.stringify({
           code: code,
           init_data: typeof initData !== 'undefined' ? initData : '',
-          user_id: (typeof user !== 'undefined' && user && user.id) || 0,
         }),
       });
+      var raw = await r.text();
       var j = {};
       try {
-        j = await r.json();
+        j = JSON.parse(raw);
       } catch (e) {
-        banner(false, '兑换接口无法解读');
+        banner(false, raw ? raw.slice(0, 80) : '兑换失败');
         return;
       }
       if (!r.ok || j.error) {
-        banner(false, j.error || '兑换失败');
+        banner(false, j.error || j.detail || '兑换失败');
         return;
       }
       banner(true, j.message || ('已兑换 ' + (j.days || '') + ' 天'));
       if (typeof loadMe === 'function') loadMe();
+      if (typeof tab === 'function') tab('me');
     } catch (e) {
       banner(false, (e && e.message) || '兑换失败');
     }
@@ -53,13 +54,6 @@
       if (ev) ev.preventDefault();
       redeemSafe();
     };
-    var card = document.getElementById('coupon-redeem-card');
-    if (card && !document.getElementById('coupon-redeem-msg')) {
-      var p = document.createElement('p');
-      p.className = 'hint';
-      p.id = 'coupon-redeem-msg';
-      card.appendChild(p);
-    }
   }
   hook();
   setTimeout(hook, 400);
