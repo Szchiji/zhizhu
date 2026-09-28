@@ -92,14 +92,24 @@ def remount_stars_pay(app) -> None:
                         db.rollback()
             finally:
                 db.close()
-            await bot.send_invoice(
-                chat_id=int(uid),
+            link = await bot.create_invoice_link(
                 title="HeYanHQ",
                 description="Official pass",
                 payload=payload,
                 currency="XTR",
                 prices=[LabeledPrice(label="Pass", amount=int(price))],
             )
-            return {"ok": True, "sent": True, "payload": payload, "amount": int(price), "discount": percent_off}
+            raw = str(link or "")
+            if raw.startswith("$") :
+                raw = "https://t.me/" + raw
+            elif raw.startswith("t.me/"):
+                raw = "https://" + raw
+            return {
+                "ok": True,
+                "invoice": raw,
+                "payload": payload,
+                "amount": int(price),
+                "discount": percent_off,
+            }
         except Exception as exc:  # noqa: BLE001
             return JSONResponse({"error": f"Stars下单失败: {exc}"}, status_code=400)
