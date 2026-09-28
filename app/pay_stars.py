@@ -8,7 +8,7 @@ from fastapi.responses import JSONResponse
 from telegram import LabeledPrice
 
 from app.access import get_bot
-from app.coupons import apply_percent, find_coupon, mark_redeemed
+from app.coupons import apply_percent, find_coupon, mark_redeemed, widen_coupon_tg_id
 from app.db import get_session
 from app.models import Order, utcnow
 from app.pay_redeem import remount_redeem
@@ -18,6 +18,7 @@ from app.tg_webapp import require_webapp_user, user_from_init
 
 
 def remount_stars_pay(app) -> None:
+    widen_coupon_tg_id()
     remount_redeem(app)
 
     @app.post("/api/mini/pay-stars")
@@ -82,12 +83,13 @@ def remount_stars_pay(app) -> None:
                         expires_at=utcnow() + timedelta(hours=24),
                     )
                 )
+                db.commit()
                 if coupon_obj:
                     try:
                         mark_redeemed(db, coupon_obj, tenant_id=tenant.id, tg_id=uid, days=0)
+                        db.commit()
                     except Exception:
-                        pass
-                db.commit()
+                        db.rollback()
             finally:
                 db.close()
             await bot.send_invoice(
