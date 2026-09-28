@@ -1,4 +1,4 @@
-"""Wave4: /mini HTML cache-bust + confirm script inject middleware."""
+"""Wave4: /mini HTML cache-bust + last-wins pay handler."""
 from __future__ import annotations
 
 import logging
@@ -12,12 +12,11 @@ from app.wave_card_wysiwyg import patch_mini_html
 log = logging.getLogger("zhizhu.wave4_mini")
 
 _PAY_BOOT = r"""<script>
-window.__payBoot33=true;
+window.__payBoot34=true;
 window.__couponPayWrap=true;
 (function(){
 function box(ok,msg){
 var t=String(msg||'');
-if(/expected pattern/i.test(t)) t='请使用 USDT，折扣码异常时先清空再试';
 var a=document.getElementById(ok?'ok':'err');
 if(a){a.style.display='block';a.textContent=t;}
 var b=document.getElementById(ok?'err':'ok');
@@ -26,11 +25,33 @@ var h=document.getElementById('pay-coupon-hint');
 if(h) h.textContent=t;
 }
 function code(){return ((document.getElementById('pay-coupon')||{}).value||'').trim();}
+function plan(){
+var list=typeof _plans!=='undefined'?_plans:[];
+for(var i=0;i<list.length;i++) if(list[i].id===(_planId||'year')) return list[i];
+return list[0]||{usdt:0,stars:0,label:''};
+}
+async function preview(){
+var p=plan();
+var base=Number(p.usdt||0);
+var off=0;
+var c=code();
+if(c){
+try{
+var q='code='+encodeURIComponent(c)+'&init_data='+encodeURIComponent(typeof initData!=='undefined'?initData:'');
+var j=await fetch('/api/mini/coupon/preview?'+q).then(function(r){return r.json();});
+if(j&&j.percent_off) off=Number(j.percent_off)||0;
+}catch(e){}
+}
+var now=off?Math.max(0.01,Math.round(base*(100-off))/100):base;
+var el=document.getElementById('planprice');
+if(el) el.innerHTML=(off?('<s>'+base+'</s> '+now):now)+' USDT · '+(p.label||'')+(off?(' · 已优惠 '+off+'%'):'');
+var h=document.getElementById('pay-coupon-hint');
+if(h&&off) h.textContent='折后 '+now+' USDT，点 USDT 按此价下单';
+}
 async function postUsdt(coupon){
 var r=await fetch('/api/mini/pay-usdt',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({init_data:typeof initData!=='undefined'?initData:'',plan:_planId||'year',coupon:coupon||''})});
-var j={};
-try{j=await r.json();}catch(e){throw new Error('USDT 接口无法解读');}
-if(!r.ok||j.error) throw new Error(j.error||('USDT '+r.status));
+var j={};try{j=await r.json();}catch(e){throw new Error('下单接口异常');}
+if(!r.ok||j.error) throw new Error(j.error||('下单失败 '+r.status));
 return j;
 }
 function showUsdt(u){
@@ -41,38 +62,37 @@ if(document.getElementById('oamt')) document.getElementById('oamt').textContent=
 if(document.getElementById('ochain')) document.getElementById('ochain').textContent=(u.chain||'TRC20').toUpperCase();
 if(document.getElementById('oaddr')) document.getElementById('oaddr').textContent=u.address||'';
 window._addr=u.address||'';
-var extra=u.discount?('已打 '+u.discount+'% 折、'):'';
-box(true,extra+'请转账 '+(u.amount||'')+' USDT，订单 '+(u.code||''));
+box(true,(u.discount?('已优惠 '+u.discount+'% · '):'')+'请转账 '+(u.amount||'')+' USDT · '+ (u.code||''));
 }
-function lockStars(){
+function bind(){
 var btns=document.querySelectorAll('#tab-pay button');
 for(var i=0;i<btns.length;i++){
 var b=btns[i];
 b.setAttribute('type','button');
 var oc=b.getAttribute('onclick')||'';
-if(oc.indexOf("'stars'")>=0 || (b.textContent||'').indexOf('Stars')>=0){
-b.disabled=true;b.textContent='暂不可用 Stars';
-b.onclick=function(ev){if(ev)ev.preventDefault();box(false,'请点绿色 USDT');};
-}else if(oc.indexOf("'usdt'")>=0 || (b.textContent||'').indexOf('USDT')>=0){
+var txt=b.textContent||'';
+if(oc.indexOf("'stars'")>=0 || txt.indexOf('Stars')>=0){
+b.textContent='Stars';
+b.disabled=false;
+b.onclick=function(ev){if(ev)ev.preventDefault();box(false,'Stars 暂不可用，请用 USDT');};
+}else if(oc.indexOf("'usdt'")>=0 || txt.indexOf('USDT')>=0){
 b.onclick=function(ev){if(ev)ev.preventDefault();window.pay(b,'usdt');};
 }
 }
-var inputs=document.querySelectorAll('input,textarea');
-for(var j=0;j<inputs.length;j++) inputs[j].removeAttribute('pattern');
+var inp=document.getElementById('pay-coupon');
+if(inp&&!inp.__preview){inp.__preview=true;inp.addEventListener('input',preview);inp.addEventListener('change',preview);}
 }
 window.pay=async function(btn,rail){
-if(rail==='stars'){box(false,'请点绿色 USDT');return;}
+if(rail==='stars'){box(false,'Stars 暂不可用，请用 USDT');return;}
 if(!user){box(false,'请从机器人打开');return;}
 if(btn) btn.disabled=true;
-try{
-var u=await postUsdt(code());
-showUsdt(u);
-}catch(e){box(false,(e&&e.message)||'USDT 下单失败');}
+try{showUsdt(await postUsdt(code()));}
+catch(e){box(false,(e&&e.message)||'下单失败');}
 if(btn) btn.disabled=false;
 };
-lockStars();
-setTimeout(lockStars,300);
-setTimeout(lockStars,1000);
+bind();preview();
+setTimeout(bind,400);
+setTimeout(preview,500);
 })();
 </script></body>"""
 
@@ -129,7 +149,7 @@ def install_mini_html_middleware(app) -> None:
                         "</body>",
                         f'<script src="/{name}?v={MINI_ASSET_VER}"></script></body>',
                     )
-            if "__payBoot33=true" not in html:
+            if "__payBoot34=true" not in html:
                 html = html.replace("</body>", _PAY_BOOT, 1)
             return HTMLResponse(
                 html,
