@@ -5,11 +5,11 @@ from datetime import datetime, timedelta
 
 from fastapi import Request
 from fastapi.responses import JSONResponse
-from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, select
+from sqlalchemy import BigInteger, DateTime, ForeignKey, Integer, String, Text, select, text
 from sqlalchemy.orm import Mapped, Session, mapped_column
 
 from app.config import ADMIN_TG_IDS
-from app.db import Base, get_session
+from app.db import Base, engine, get_session
 from app.models import utcnow
 from app.plans import list_plans
 from app.services import add_admin_audit, get_or_create_tenant
@@ -36,9 +36,17 @@ class CouponRedemption(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     coupon_id: Mapped[int] = mapped_column(ForeignKey("coupons.id"), index=True)
     tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), index=True)
-    tg_id: Mapped[int] = mapped_column(Integer, index=True)
+    tg_id: Mapped[int] = mapped_column(BigInteger, index=True)
     days_granted: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+def widen_coupon_tg_id() -> None:
+    try:
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE coupon_redemptions ALTER COLUMN tg_id TYPE BIGINT"))
+    except Exception:
+        pass
 
 
 def _uid(body=None, user_id: int = 0, init_data: str = "") -> int:
@@ -125,6 +133,8 @@ def redeem_coupon(db: Session, *, tenant_id: int, tg_id: int, code: str) -> tupl
 
 
 def mount_wave3(app) -> None:
+    widen_coupon_tg_id()
+
     @app.get("/api/mini/plans")
     async def public_plans():
         db = get_session()
@@ -229,22 +239,5 @@ def mount_wave3(app) -> None:
             )
             db.commit()
             return {"ok": True, "code": row.code, "kind": row.kind, "value_days": row.value_days}
-        finally:
-            db.close()
-
-    @app.post("/api/mini/coupon/redeem")
-    async def redeem(request: Request):
-        body = await request.json()
-        uid = _uid(body=body)
-        if not uid:
-            return JSONResponse({"error": "未登录"}, status_code=401)
-        db = get_session()
-        try:
-            tenant = get_or_create_tenant(db, uid)
-            ok, msg, days = redeem_coupon(db, tenant_id=tenant.id, tg_id=uid, code=str(body.get("code") or ""))
-            if not ok:
-                return JSONResponse({"error": msg}, status_code=400)
-            db.commit()
-            return {"ok": True, "message": msg, "days": days, "paid_until": str(tenant.paid_until or "")}
         finally:
             db.close()
