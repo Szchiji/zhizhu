@@ -56,6 +56,13 @@
   function ensure() {
     var me = el('tab-me');
     if (!me) return;
+    var existBtn = el('btn-share-card');
+    if (existBtn) {
+      existBtn.textContent = '发到私聊';
+      existBtn.onclick = shareCard;
+    }
+    var existHint = document.querySelector('#mycard-wrap .hint');
+    if (existHint) existHint.textContent = '机器人会把正式卡发到私聊，长按即可转发到群';
     if (!el('mycard-wrap')) {
       var card = document.createElement('div');
       card.className = 'card';
