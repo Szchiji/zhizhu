@@ -214,7 +214,6 @@ async def mini_me(user_id: int = 0, init_data: str = "", username: str = "", dis
 
 @app.get("/api/mini/lookup")
 async def mini_lookup(q: str = "", user_id: int = 0, init_data: str = ""):
-    # Public search; optional deny check only when init_data verifies (never bare user_id).
     uid = _uid(user_id=user_id, init_data=init_data)
     if uid:
         blocked = await deny_json(uid)
@@ -271,3 +270,7 @@ async def mini_lookup(q: str = "", user_id: int = 0, init_data: str = ""):
 from pathlib import Path as _Path
 _rest = _Path(__file__).with_name("_main_rest.py")
 exec(compile(_rest.read_text(encoding="utf-8"), str(_rest), "exec"), globals())
+
+from app.coupon_order import remount_mini_order
+
+remount_mini_order(app)
