@@ -6,12 +6,14 @@ from fastapi import Request
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
+from app.access import get_bot
 from app.brand import bot_username
 from app.config import ADMIN_TG_IDS
 from app.db import get_session
 from app.models import utcnow
-from app.services import get_or_create_tenant, get_setting, set_setting
+from app.services import find_paid_by_tg_id, get_or_create_tenant, get_setting, set_setting
 from app.tg_webapp import require_webapp_user
+from app.verify import PARSE_MODE, card_kb, card_text
 
 
 def ref_on(db: Session) -> bool:
@@ -87,6 +89,32 @@ def remount_referral(app) -> None:
         db = get_session()
         try:
             return {"ok": True, "on": ref_on(db), "days": ref_days(db), "link": invite_link(uid)}
+        finally:
+            db.close()
+
+    @app.post("/api/mini/send-card")
+    async def send_my_card(request: Request):
+        body = await request.json()
+        uid = require_webapp_user(init_data=str(body.get("init_data") or ""), body=body)
+        if not uid:
+            return JSONResponse({"error": "未登录"}, status_code=401)
+        bot = get_bot()
+        if bot is None:
+            return JSONResponse({"error": "机器人未就绪"}, status_code=503)
+        db = get_session()
+        try:
+            ident = find_paid_by_tg_id(db, uid)
+            if not ident:
+                return JSONResponse({"error": "尚未开通或资料未生效"}, status_code=400)
+            await bot.send_message(
+                chat_id=int(uid),
+                text=card_text(ident, db=db),
+                reply_markup=card_kb(ident),
+                parse_mode=PARSE_MODE,
+            )
+            return {"ok": True}
+        except Exception as exc:  # noqa: BLE001
+            return JSONResponse({"error": f"发送失败: {exc}"}, status_code=400)
         finally:
             db.close()
 
