@@ -12,11 +12,11 @@ from app.wave_card_wysiwyg import patch_mini_html
 log = logging.getLogger("zhizhu.wave4_mini")
 
 _PAY_BOOT = r"""<script>
+window.__payBoot31=true;
 window.__couponPayWrap=true;
 (function(){
 function box(ok,msg){
 var t=String(msg||'');
-if(/expected pattern/i.test(t)) t='请改用 USDT 付款（Stars 账单被 Telegram 拒绝）';
 var a=document.getElementById(ok?'ok':'err');
 if(a){a.style.display='block';a.textContent=t;}
 var b=document.getElementById(ok?'err':'ok');
@@ -25,11 +25,22 @@ var h=document.getElementById('pay-coupon-hint');
 if(h) h.textContent=t;
 }
 function code(){return ((document.getElementById('pay-coupon')||{}).value||'').trim();}
+function lockStars(){
+var btns=document.querySelectorAll('#tab-pay button');
+for(var i=0;i<btns.length;i++){
+var b=btns[i];
+if((b.getAttribute('onclick')||'').indexOf("'stars'")>=0 || (b.textContent||'').indexOf('Stars')>=0){
+b.disabled=true;
+b.textContent='暂不可用 Stars';
+b.onclick=function(ev){if(ev)ev.preventDefault();box(false,'Stars 被 Telegram 拒绝，请点绿色 USDT');};
+}
+}
+}
 window.pay=async function(btn,rail){
+if(rail==='stars'){box(false,'Stars 被 Telegram 拒绝，请点绿色 USDT');return;}
 if(!user){box(false,'请从机器人打开');return;}
 btn.disabled=true;
 try{
-if(rail==='usdt'){
 var u=await api('/api/mini/pay-usdt',{plan:_planId||'year',coupon:code()});
 var c=document.getElementById('checkout');
 if(c) c.classList.remove('hidden');
@@ -39,15 +50,12 @@ if(document.getElementById('ochain')) document.getElementById('ochain').textCont
 if(document.getElementById('oaddr')) document.getElementById('oaddr').textContent=u.address||'';
 window._addr=u.address||'';
 box(true,'请转账 '+(u.amount||'')+' USDT，订单 '+(u.code||''));
-}else{
-var j=await api('/api/mini/order',{plan:_planId||'year',rail:'stars',coupon:code()});
-if(j.sent){box(true,'折后 '+(j.amount||'')+'星，账单已发到机器人');
-try{if(tg&&tg.close)setTimeout(function(){tg.close();},600);}catch(e){}}
-else box(false,'请改用 USDT 付款');
-}
-}catch(e){box(false,(e&&e.message)||'下单失败');}
+}catch(e){box(false,(e&&e.message)||'USDT 下单失败');}
 btn.disabled=false;
 };
+lockStars();
+setTimeout(lockStars,400);
+setTimeout(lockStars,1200);
 })();
 </script></body>"""
 
@@ -104,7 +112,7 @@ def install_mini_html_middleware(app) -> None:
                         "</body>",
                         f'<script src="/{name}?v={MINI_ASSET_VER}"></script></body>',
                     )
-            if "__couponPayWrap=true" not in html:
+            if "__payBoot31=true" not in html:
                 html = html.replace("</body>", _PAY_BOOT, 1)
             return HTMLResponse(
                 html,
