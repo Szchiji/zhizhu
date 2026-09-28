@@ -76,8 +76,7 @@ def _client_ip(request: Request) -> str:
 
 
 def _uid(body: dict | None = None, user_id: int = 0, init_data: str = "") -> int:
-    """Identity from verified Telegram WebApp init_data only (ignores bare user_id)."""
-    del user_id  # never trust client-supplied user_id as proof of identity
+    del user_id
     return require_webapp_user(init_data=init_data, body=body)
 
 
@@ -266,11 +265,12 @@ async def mini_lookup(q: str = "", user_id: int = 0, init_data: str = ""):
         db.close()
 
 
-# Load remaining route handlers (split for MCP push size limits).
 from pathlib import Path as _Path
 _rest = _Path(__file__).with_name("_main_rest.py")
 exec(compile(_rest.read_text(encoding="utf-8"), str(_rest), "exec"), globals())
 
 from app.coupon_order import remount_mini_order
+from app.pay_usdt import remount_usdt_pay
 
 remount_mini_order(app)
+remount_usdt_pay(app)
