@@ -10,6 +10,15 @@ from app.tg_webapp import require_webapp_user
 
 
 def remount_redeem(app) -> None:
+    kept = []
+    for route in list(app.router.routes):
+        path = getattr(route, "path", None)
+        methods = set(getattr(route, "methods", None) or [])
+        if path == "/api/mini/coupon/redeem" and "POST" in methods:
+            continue
+        kept.append(route)
+    app.router.routes[:] = kept
+
     @app.post("/api/mini/coupon/redeem")
     async def redeem(request: Request):
         try:
