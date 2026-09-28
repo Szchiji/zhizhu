@@ -12,11 +12,12 @@ from app.wave_card_wysiwyg import patch_mini_html
 log = logging.getLogger("zhizhu.wave4_mini")
 
 _PAY_BOOT = r"""<script>
-window.__payBoot31=true;
+window.__payBoot32=true;
 window.__couponPayWrap=true;
 (function(){
 function box(ok,msg){
 var t=String(msg||'');
+if(/expected pattern/i.test(t)) t=ok?'下单已提交':'USDT 下单失败，请清空折扣码再试';
 var a=document.getElementById(ok?'ok':'err');
 if(a){a.style.display='block';a.textContent=t;}
 var b=document.getElementById(ok?'err':'ok');
@@ -25,23 +26,14 @@ var h=document.getElementById('pay-coupon-hint');
 if(h) h.textContent=t;
 }
 function code(){return ((document.getElementById('pay-coupon')||{}).value||'').trim();}
-function lockStars(){
-var btns=document.querySelectorAll('#tab-pay button');
-for(var i=0;i<btns.length;i++){
-var b=btns[i];
-if((b.getAttribute('onclick')||'').indexOf("'stars'")>=0 || (b.textContent||'').indexOf('Stars')>=0){
-b.disabled=true;
-b.textContent='暂不可用 Stars';
-b.onclick=function(ev){if(ev)ev.preventDefault();box(false,'Stars 被 Telegram 拒绝，请点绿色 USDT');};
+async function postUsdt(coupon){
+var r=await fetch('/api/mini/pay-usdt',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({init_data:typeof initData!=='undefined'?initData:'',plan:_planId||'year',coupon:coupon||''})});
+var j={};
+try{j=await r.json();}catch(e){throw new Error('USDT 接口无法解读');}
+if(!r.ok||j.error) throw new Error(j.error||('USDT '+r.status));
+return j;
 }
-}
-}
-window.pay=async function(btn,rail){
-if(rail==='stars'){box(false,'Stars 被 Telegram 拒绝，请点绿色 USDT');return;}
-if(!user){box(false,'请从机器人打开');return;}
-btn.disabled=true;
-try{
-var u=await api('/api/mini/pay-usdt',{plan:_planId||'year',coupon:code()});
+function showUsdt(u){
 var c=document.getElementById('checkout');
 if(c) c.classList.remove('hidden');
 if(document.getElementById('oid')) document.getElementById('oid').textContent=u.code||'';
@@ -50,12 +42,40 @@ if(document.getElementById('ochain')) document.getElementById('ochain').textCont
 if(document.getElementById('oaddr')) document.getElementById('oaddr').textContent=u.address||'';
 window._addr=u.address||'';
 box(true,'请转账 '+(u.amount||'')+' USDT，订单 '+(u.code||''));
+}
+function lockStars(){
+var btns=document.querySelectorAll('#tab-pay button');
+for(var i=0;i<btns.length;i++){
+var b=btns[i];
+b.setAttribute('type','button');
+var oc=b.getAttribute('onclick')||'';
+if(oc.indexOf("'stars'")>=0 || (b.textContent||'').indexOf('Stars')>=0){
+b.disabled=true;b.textContent='暂不可用 Stars';
+b.onclick=function(ev){if(ev)ev.preventDefault();box(false,'请点绿色 USDT');};
+}else if(oc.indexOf("'usdt'")>=0 || (b.textContent||'').indexOf('USDT')>=0){
+b.onclick=function(ev){if(ev)ev.preventDefault();window.pay(b,'usdt');};
+}
+}
+var inputs=document.querySelectorAll('input,textarea');
+for(var j=0;j<inputs.length;j++) inputs[j].removeAttribute('pattern');
+}
+window.pay=async function(btn,rail){
+if(rail==='stars'){box(false,'请点绿色 USDT');return;}
+if(!user){box(false,'请从机器人打开');return;}
+if(btn) btn.disabled=true;
+try{
+var u;
+try{u=await postUsdt(code());}
+catch(e1){u=await postUsdt('');}
+showUsdt(u);
 }catch(e){box(false,(e&&e.message)||'USDT 下单失败');}
-btn.disabled=false;
+if(btn) btn.disabled=false;
 };
 lockStars();
-setTimeout(lockStars,400);
-setTimeout(lockStars,1200);
+setTimeout(lockStars,300);
+setTimeout(lockStars,1000);
+var err=document.getElementById('err');
+if(err&&/expected pattern/i.test(err.textContent||'')) err.style.display='none';
 })();
 </script></body>"""
 
@@ -112,7 +132,7 @@ def install_mini_html_middleware(app) -> None:
                         "</body>",
                         f'<script src="/{name}?v={MINI_ASSET_VER}"></script></body>',
                     )
-            if "__payBoot31=true" not in html:
+            if "__payBoot32=true" not in html:
                 html = html.replace("</body>", _PAY_BOOT, 1)
             return HTMLResponse(
                 html,
