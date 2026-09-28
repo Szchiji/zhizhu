@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import secrets
 from datetime import datetime, timedelta
+from math import floor
 
 from fastapi import Request
 from fastapi.responses import JSONResponse
@@ -21,8 +22,8 @@ class Coupon(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     code: Mapped[str] = mapped_column(String(32), unique=True, index=True)
-    kind: Mapped[str] = mapped_column(String(16), default="days")  # days | discount_days
-    value_days: Mapped[int] = mapped_column(Integer, default=0)
+    kind: Mapped[str] = mapped_column(String(16), default="days")  # days | percent
+    value_days: Mapped[int] = mapped_column(Integer, default=0)  # days gift OR percent off 1-90
     max_redemptions: Mapped[int | None] = mapped_column(Integer, nullable=True)
     redeemed_count: Mapped[int] = mapped_column(Integer, default=0)
     expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
@@ -48,30 +49,64 @@ def _uid(body=None, user_id: int = 0, init_data: str = "") -> int:
 
 def _admin(body=None, user_id: int = 0, init_data: str = "") -> int:
     uid = _uid(body, user_id, init_data)
-    if uid not in ADMIN_TG_IDS:
-        return 0
-    return uid
+    return uid if uid in ADMIN_TG_IDS else 0
+
+
+def find_coupon(db: Session, code: str) -> Coupon | None:
+    raw = (code or "").strip().upper()
+    if not raw:
+        return None
+    return db.scalar(select(Coupon).where(Coupon.code == raw))
+
+
+def coupon_error(db: Session, coupon: Coupon | None, *, tenant_id: int | None = None) -> str:
+    if not coupon:
+        return "兑换码无效"
+    if coupon.expires_at and coupon.expires_at < utcnow():
+        return "兑换码已过期"
+    if coupon.max_redemptions is not None and coupon.redeemed_count >= coupon.max_redemptions:
+        return "兑换码已兑完"
+    if tenant_id:
+        prior = db.scalar(
+            select(CouponRedemption).where(
+                CouponRedemption.coupon_id == coupon.id,
+                CouponRedemption.tenant_id == tenant_id,
+            )
+        )
+        if prior:
+            return "已兑换过该码"
+    return ""
+
+
+def apply_percent(amount: float, percent_off: int, *, stars: bool) -> float:
+    pct = max(1, min(90, int(percent_off or 0)))
+    raw = float(amount) * (100 - pct) / 100.0
+    if stars:
+        return max(1, int(round(raw)))
+    return max(0.01, round(raw, 2))
+
+
+def mark_redeemed(db: Session, coupon: Coupon, *, tenant_id: int, tg_id: int, days: int = 0) -> None:
+    coupon.redeemed_count = int(coupon.redeemed_count or 0) + 1
+    db.add(
+        CouponRedemption(
+            coupon_id=coupon.id,
+            tenant_id=tenant_id,
+            tg_id=int(tg_id),
+            days_granted=int(days or 0),
+        )
+    )
 
 
 def redeem_coupon(db: Session, *, tenant_id: int, tg_id: int, code: str) -> tuple[bool, str, int]:
-    raw = (code or "").strip().upper()
-    if not raw:
-        return False, "缺少兑换码", 0
-    coupon = db.scalar(select(Coupon).where(Coupon.code == raw))
-    if not coupon:
-        return False, "兑换码无效", 0
-    if coupon.expires_at and coupon.expires_at < utcnow():
-        return False, "兑换码已过期", 0
-    if coupon.max_redemptions is not None and coupon.redeemed_count >= coupon.max_redemptions:
-        return False, "兑换码已兑完", 0
-    prior = db.scalar(
-        select(CouponRedemption).where(
-            CouponRedemption.coupon_id == coupon.id,
-            CouponRedemption.tenant_id == tenant_id,
-        )
-    )
-    if prior:
-        return False, "已兑换过该码", 0
+    coupon = find_coupon(db, code)
+    err = coupon_error(db, coupon, tenant_id=tenant_id)
+    if err:
+        return False, err, 0
+    assert coupon is not None
+    kind = (coupon.kind or "days").strip().lower()
+    if kind == "percent":
+        return False, f"这是折扣码（{int(coupon.value_days or 0)}%优惠），请在开通页填写后付款", 0
     days = max(0, int(coupon.value_days or 0))
     if days <= 0:
         return False, "兑换码未配置天数", 0
@@ -86,15 +121,7 @@ def redeem_coupon(db: Session, *, tenant_id: int, tg_id: int, code: str) -> tupl
     tenant.paid_until = base + timedelta(days=days)
     if tenant.status not in {"owner", "suspended"}:
         tenant.status = "active"
-    coupon.redeemed_count = int(coupon.redeemed_count or 0) + 1
-    db.add(
-        CouponRedemption(
-            coupon_id=coupon.id,
-            tenant_id=tenant_id,
-            tg_id=int(tg_id),
-            days_granted=days,
-        )
-    )
+    mark_redeemed(db, coupon, tenant_id=tenant_id, tg_id=tg_id, days=days)
     return True, f"已兑换 {days} 天", days
 
 
@@ -104,6 +131,32 @@ def mount_wave3(app) -> None:
         db = get_session()
         try:
             return {"ok": True, "plans": list_plans(db)}
+        finally:
+            db.close()
+
+    @app.get("/api/mini/coupon/preview")
+    async def preview_coupon(code: str = "", user_id: int = 0, init_data: str = ""):
+        uid = _uid(user_id=user_id, init_data=init_data)
+        if not uid:
+            return JSONResponse({"error": "未登录"}, status_code=401)
+        db = get_session()
+        try:
+            tenant = get_or_create_tenant(db, uid)
+            coupon = find_coupon(db, code)
+            err = coupon_error(db, coupon, tenant_id=tenant.id)
+            if err:
+                return JSONResponse({"error": err}, status_code=400)
+            assert coupon is not None
+            kind = (coupon.kind or "days").strip().lower()
+            if kind == "percent":
+                pct = max(1, min(90, int(coupon.value_days or 0)))
+                return {"ok": True, "kind": "percent", "percent_off": pct, "message": f"本单 {pct}% 优惠"}
+            return {
+                "ok": True,
+                "kind": "days",
+                "value_days": int(coupon.value_days or 0),
+                "message": f"兑换即送 {int(coupon.value_days or 0)} 天，请到「我的」页兑换",
+            }
         finally:
             db.close()
 
@@ -140,10 +193,17 @@ def mount_wave3(app) -> None:
         if not admin:
             return JSONResponse({"error": "仅管理员"}, status_code=403)
         code = str(body.get("code") or "").strip().upper() or ("CP-" + secrets.token_hex(3).upper())
+        kind = str(body.get("kind") or "days").strip().lower()
+        if kind not in {"days", "percent"}:
+            kind = "days"
         try:
-            days = max(1, int(body.get("value_days") or body.get("days") or 7))
+            raw_val = int(body.get("value_days") or body.get("days") or body.get("percent") or 0)
         except (TypeError, ValueError):
-            days = 7
+            raw_val = 0
+        if kind == "percent":
+            days = max(1, min(90, raw_val or 10))
+        else:
+            days = max(1, raw_val or 7)
         max_r = body.get("max_redemptions")
         try:
             max_r = int(max_r) if max_r not in (None, "") else None
@@ -155,7 +215,7 @@ def mount_wave3(app) -> None:
             if not row:
                 row = Coupon(code=code)
                 db.add(row)
-            row.kind = str(body.get("kind") or "days")[:16]
+            row.kind = kind
             row.value_days = days
             row.max_redemptions = max_r
             row.note = str(body.get("note") or "")[:200] or None
@@ -165,9 +225,11 @@ def mount_wave3(app) -> None:
                     row.expires_at = datetime.fromisoformat(str(exp).replace("Z", ""))
                 except ValueError:
                     pass
-            add_admin_audit(db, admin, "coupon_save", target_type="coupon", target_id=code, detail=f"days={days}")
+            add_admin_audit(
+                db, admin, "coupon_save", target_type="coupon", target_id=code, detail=f"kind={kind} val={days}"
+            )
             db.commit()
-            return {"ok": True, "code": row.code, "value_days": row.value_days}
+            return {"ok": True, "code": row.code, "kind": row.kind, "value_days": row.value_days}
         finally:
             db.close()
 
