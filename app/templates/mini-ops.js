@@ -1,4 +1,4 @@
-/* wave7: coupons + safer Stars invoice open */
+/* wave7: coupons; DOM toasts only; Stars invoice slug normalize */
 (function () {
   function qAuth() {
     return (
@@ -34,24 +34,28 @@
 
   function toast(kind, msg) {
     var text = String(msg || '');
-    try {
-      if (typeof tg !== 'undefined' && tg && tg.showAlert) {
-        tg.showAlert(text);
-        return;
-      }
-    } catch (e) {}
-    try {
-      window.alert(text);
-    } catch (e2) {}
+    var okEl = document.getElementById('ok');
+    var errEl = document.getElementById('err');
+    var useOk = kind === ok || kind === true || kind === 'ok';
+    if (okEl) okEl.style.display = useOk ? 'block' : 'none';
+    if (errEl) errEl.style.display = useOk ? 'none' : 'block';
+    var el = useOk ? okEl : errEl;
+    if (el) el.textContent = text;
+    var hint = document.getElementById('coupon-redeem-msg');
+    if (hint) hint.textContent = text;
+    var payHint = document.getElementById('pay-coupon-hint');
+    if (payHint && !useOk) payHint.textContent = text;
   }
 
   function invoiceLink(raw) {
     if (raw && typeof raw === 'object') raw = raw.url || raw.invoice_url || raw.invoice || '';
     var u = String(raw || '').trim();
+    var m = u.match(/(?:\$|invoice\/)([A-Za-z0-9\-_=]+)/);
+    if (m) return 'https://t.me/$' + m[1];
     if (u.indexOf('http://') === 0) u = 'https://' + u.slice(7);
     if (u.charAt(0) === '$') u = 'https://t.me/' + u;
     if (u.indexOf('t.me/') === 0) u = 'https://' + u;
-    return u;
+    return u.split('?')[0];
   }
 
   function wrapPayHooks() {
@@ -59,12 +63,6 @@
       window.__couponShowWrap = true;
       window.show = function (el, msg) {
         toast(el, msg);
-        try {
-          if (el && el.style) {
-            el.style.display = 'block';
-            el.textContent = String(msg || '');
-          }
-        } catch (e) {}
       };
     }
     if (typeof api === 'function' && !window.__couponApiWrap) {
@@ -89,31 +87,34 @@
         try {
           var j = await api('/api/mini/order', { plan: _planId || 'year', rail: rail });
           if (rail === 'stars' || j.invoice) {
-            var inv = invoiceLink(j.invoice);
-            if (!inv || inv.indexOf('https://t.me/') !== 0) {
-              throw new Error('账单链接无效，请关掉小程序重试');
+            var inv = invoiceLink(j.invoice || j.invoice_alt);
+            if (!inv || inv.indexOf('https://t.me/$') !== 0) {
+              throw new Error('账单链接无效，请改用 USDT：' + String(j.invoice || '').slice(0, 80));
             }
             if (!tg || !tg.openInvoice) throw new Error('当前客户端不能打开 Stars 账单');
-            tg.openInvoice(inv, async function (st) {
-              if (st === 'paid') {
-                toast(ok, '支付成功');
-                try {
-                  await api('/api/mini/stars-paid', {
-                    payload: j.payload || '',
-                    username: user && user.username,
-                    display_name:
-                      user && (user.first_name || '') + (user.last_name ? ' ' + user.last_name : ''),
-                  });
-                } catch (e) {}
-                if (typeof loadMe === 'function') loadMe();
-                if (typeof tab === 'function') tab('me');
-              }
-              btn.disabled = false;
-            });
+            try {
+              tg.openInvoice(inv, async function (st) {
+                if (st === 'paid') {
+                  toast(ok, '支付成功');
+                  try {
+                    await api('/api/mini/stars-paid', {
+                      payload: j.payload || '',
+                      username: user && user.username,
+                      display_name:
+                        user && (user.first_name || '') + (user.last_name ? ' ' + user.last_name : ''),
+                    });
+                  } catch (e) {}
+                  if (typeof loadMe === 'function') loadMe();
+                  if (typeof tab === 'function') tab('me');
+                }
+                btn.disabled = false;
+              });
+            } catch (ie) {
+              throw new Error('无法打开 Stars，请改用 USDT');
+            }
             return;
           }
-          if (j.address && typeof tab === 'function') {
-            /* fall back to original USDT drawer if present */
+          if (j.address) {
             var checkout = document.getElementById('checkout');
             if (checkout) {
               checkout.classList.remove('hidden');
@@ -122,6 +123,7 @@
               if (document.getElementById('ochain')) document.getElementById('ochain').textContent = (j.chain || 'TRC20').toUpperCase();
               if (document.getElementById('oaddr')) document.getElementById('oaddr').textContent = j.address || '';
             }
+            toast(ok, '折后金额 ' + (j.amount || '') + ' USDT');
           }
         } catch (e) {
           toast(err, e.message || String(e));
@@ -160,7 +162,8 @@
       '<div class="kicker">Coupon</div><h1>兑换码</h1>' +
       '<p class="sub">仅用于「赠送天数」码。折扣码请回开通页填写。</p>' +
       '<label>兑换码</label><input id="coupon-code" placeholder="如 CP-XXXXXX" />' +
-      '<div class="btns"><button type="button" id="coupon-redeem-btn">兑换</button></div>';
+      '<div class="btns"><button type="button" id="coupon-redeem-btn">兑换</button></div>' +
+      '<p class="hint" id="coupon-redeem-msg"></p>';
     var ledger = document.getElementById('olist');
     var ledgerCard = ledger ? ledger.closest('.card') : null;
     if (ledgerCard) host.insertBefore(card, ledgerCard);
@@ -170,12 +173,16 @@
 
   async function redeemCoupon() {
     var code = (document.getElementById('coupon-code').value || '').trim();
+    if (!code) {
+      toast(err, '请输入兑换码');
+      return;
+    }
     try {
       var j = await postJson('/api/mini/coupon/redeem', { code: code });
       toast(ok, j.message || ('已兑换 ' + (j.days || '') + ' 天'));
       if (typeof loadMe === 'function') loadMe();
     } catch (e) {
-      toast(err, e.message);
+      toast(err, e.message || '兑换失败');
     }
   }
 
@@ -336,6 +343,13 @@
   }
 
   function boot() {
+    try {
+      if (window.Telegram && Telegram.WebApp && Telegram.WebApp.showAlert) {
+        Telegram.WebApp.showAlert = function (msg) {
+          toast(err, msg);
+        };
+      }
+    } catch (e) {}
     ensurePayCoupon();
     ensureRedeemCard();
     ensureCouponsAdmin();
