@@ -1,4 +1,4 @@
-/* wave7: coupons admin/redeem + order revoke UI + percent coupons */
+/* wave7: coupons + safer Stars invoice open */
 (function () {
   function qAuth() {
     return (
@@ -32,7 +32,41 @@
     return ((document.getElementById('pay-coupon') || {}).value || '').trim();
   }
 
+  function toast(kind, msg) {
+    var text = String(msg || '');
+    try {
+      if (typeof tg !== 'undefined' && tg && tg.showAlert) {
+        tg.showAlert(text);
+        return;
+      }
+    } catch (e) {}
+    try {
+      window.alert(text);
+    } catch (e2) {}
+  }
+
+  function invoiceLink(raw) {
+    if (raw && typeof raw === 'object') raw = raw.url || raw.invoice_url || raw.invoice || '';
+    var u = String(raw || '').trim();
+    if (u.indexOf('http://') === 0) u = 'https://' + u.slice(7);
+    if (u.charAt(0) === '$') u = 'https://t.me/' + u;
+    if (u.indexOf('t.me/') === 0) u = 'https://' + u;
+    return u;
+  }
+
   function wrapPayHooks() {
+    if (typeof show === 'function' && !window.__couponShowWrap) {
+      window.__couponShowWrap = true;
+      window.show = function (el, msg) {
+        toast(el, msg);
+        try {
+          if (el && el.style) {
+            el.style.display = 'block';
+            el.textContent = String(msg || '');
+          }
+        } catch (e) {}
+      };
+    }
     if (typeof api === 'function' && !window.__couponApiWrap) {
       window.__couponApiWrap = true;
       var _api = api;
@@ -46,9 +80,53 @@
     }
     if (typeof pay === 'function' && !window.__couponPayWrap) {
       window.__couponPayWrap = true;
-      var _pay = pay;
-      window.pay = function (btn, rail) {
-        return _pay(btn, rail);
+      window.pay = async function (btn, rail) {
+        if (!user) {
+          toast(err, '请从机器人打开');
+          return;
+        }
+        btn.disabled = true;
+        try {
+          var j = await api('/api/mini/order', { plan: _planId || 'year', rail: rail });
+          if (rail === 'stars' || j.invoice) {
+            var inv = invoiceLink(j.invoice);
+            if (!inv || inv.indexOf('https://t.me/') !== 0) {
+              throw new Error('账单链接无效，请关掉小程序重试');
+            }
+            if (!tg || !tg.openInvoice) throw new Error('当前客户端不能打开 Stars 账单');
+            tg.openInvoice(inv, async function (st) {
+              if (st === 'paid') {
+                toast(ok, '支付成功');
+                try {
+                  await api('/api/mini/stars-paid', {
+                    payload: j.payload || '',
+                    username: user && user.username,
+                    display_name:
+                      user && (user.first_name || '') + (user.last_name ? ' ' + user.last_name : ''),
+                  });
+                } catch (e) {}
+                if (typeof loadMe === 'function') loadMe();
+                if (typeof tab === 'function') tab('me');
+              }
+              btn.disabled = false;
+            });
+            return;
+          }
+          if (j.address && typeof tab === 'function') {
+            /* fall back to original USDT drawer if present */
+            var checkout = document.getElementById('checkout');
+            if (checkout) {
+              checkout.classList.remove('hidden');
+              if (document.getElementById('oid')) document.getElementById('oid').textContent = j.code || '';
+              if (document.getElementById('oamt')) document.getElementById('oamt').textContent = (j.amount || '') + ' USDT';
+              if (document.getElementById('ochain')) document.getElementById('ochain').textContent = (j.chain || 'TRC20').toUpperCase();
+              if (document.getElementById('oaddr')) document.getElementById('oaddr').textContent = j.address || '';
+            }
+          }
+        } catch (e) {
+          toast(err, e.message || String(e));
+        }
+        btn.disabled = false;
       };
     }
   }
@@ -94,10 +172,10 @@
     var code = (document.getElementById('coupon-code').value || '').trim();
     try {
       var j = await postJson('/api/mini/coupon/redeem', { code: code });
-      show(ok, j.message || ('已兑换 ' + (j.days || '') + ' 天'));
+      toast(ok, j.message || ('已兑换 ' + (j.days || '') + ' 天'));
       if (typeof loadMe === 'function') loadMe();
     } catch (e) {
-      show(err, e.message);
+      toast(err, e.message);
     }
   }
 
@@ -105,7 +183,6 @@
     var nav = document.getElementById('admnav');
     var host = document.getElementById('tab-adm');
     if (!nav || !host || document.getElementById('asec-coupons')) return;
-
     var btn = document.createElement('button');
     btn.type = 'button';
     btn.setAttribute('data-sec', 'coupons');
@@ -115,7 +192,6 @@
       loadCoupons();
     };
     nav.appendChild(btn);
-
     var sec = document.createElement('div');
     sec.className = 'adm-sec';
     sec.id = 'asec-coupons';
@@ -128,7 +204,7 @@
       '</select>' +
       '<label id="cp-val-lab">赠送天数</label>' +
       '<input id="cp-days" type="number" value="7" />' +
-      '<p class="hint">折扣填 1–90，例如 20 表示本单减 20%。折扣码要在开通页使用；赠送天数码在「我的」页兑换。</p>' +
+      '<p class="hint">折扣填 1–90，例如 20 表示本单减 20%。</p>' +
       '<label>最大兑换次数（可空=不限）</label><input id="cp-max" type="number" placeholder="不限" />' +
       '<label>备注</label><input id="cp-note" placeholder="活动说明" />' +
       '<div class="btns"><button type="button" id="cp-save">保存兑换码</button>' +
@@ -197,11 +273,11 @@
       var max = (document.getElementById('cp-max').value || '').trim();
       if (max !== '') body.max_redemptions = Number(max);
       var j = await postJson('/api/mini/admin/coupons', body);
-      show(ok, '已保存 ' + (j.code || '') + (kind === 'percent' ? ' · 折扣码' : ' · 赠天码'));
+      toast(ok, '已保存 ' + (j.code || '') + (kind === 'percent' ? ' · 折扣码' : ' · 赠天码'));
       if (j.code) document.getElementById('cp-code').value = j.code;
       loadCoupons();
     } catch (e) {
-      show(err, e.message);
+      toast(err, e.message);
     }
   }
 
@@ -222,22 +298,17 @@
   async function revokeOrder() {
     var code = ((document.getElementById('acode') || {}).value || '').trim();
     if (!code) {
-      show(err, '请填写订单号');
+      toast(err, '请填写订单号');
       return;
     }
-    var yes = true;
-    if (typeof confirmAct === 'function') {
-      yes = await confirmAct('撤销开通', '撤销 ' + code + ' 将回退会员天数（不调用 Stars 官方退款），确认？');
-    } else {
-      yes = window.confirm('撤销 ' + code + '？');
-    }
+    var yes = window.confirm('撤销 ' + code + '？');
     if (!yes) return;
     try {
       var j = await postJson('/api/mini/admin/revoke', { code: code });
-      show(ok, '已撤销 ' + (j.code || code) + (j.paid_until ? ' · 到期 ' + j.paid_until : ''));
+      toast(ok, '已撤销 ' + (j.code || code));
       if (typeof searchOrders === 'function') searchOrders();
     } catch (e) {
-      show(err, e.message);
+      toast(err, e.message);
     }
   }
 
