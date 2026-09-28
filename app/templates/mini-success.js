@@ -65,10 +65,10 @@
         '<h1>我的登记卡</h1>' +
         '<div class="idcard" id="mycard">加载中…</div>' +
         '<div class="btns">' +
-        '<button type="button" id="btn-share-card">发到群</button>' +
+        '<button type="button" id="btn-share-card">发到私聊</button>' +
         '<button type="button" class="ghost" id="btn-copy-card">复制卡面</button>' +
         '</div>' +
-        '<p class="hint">发到群会由机器人出官方卡，带格式和按钮</p>';
+        '<p class="hint">机器人会把正式卡发到私聊，长按即可转发到群</p>';
       var first = me.querySelector('.card');
       if (first && first.nextSibling) me.insertBefore(card, first.nextSibling);
       else me.insertBefore(card, me.firstChild);
@@ -104,14 +104,19 @@
   function rawCard() {
     return el('mycard') ? el('mycard').getAttribute('data-raw') || el('mycard').innerText || '' : '';
   }
-  function shareCard() {
-    var name = ((el('mycard') && el('mycard').getAttribute('data-user')) || '').replace(/^@/, '');
-    var wa = window.Telegram && Telegram.WebApp;
-    if (name && wa && typeof wa.switchInlineQuery === 'function') {
-      wa.switchInlineQuery(name);
-      return;
+  async function shareCard() {
+    try {
+      var r = await fetch('/api/mini/send-card', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ init_data: data() }),
+      });
+      var j = await r.json();
+      if (!r.ok || j.error) throw new Error(j.error || '发送失败');
+      box(true, '已发到机器人私聊，关闭小程序后可转发');
+    } catch (e) {
+      box(false, (e && e.message) || '发送失败');
     }
-    box(false, '请在群里输入 @机器人 加空格 加 @' + (name || '用户名'));
   }
   function copyCard() {
     var text = toPlain(rawCard());
