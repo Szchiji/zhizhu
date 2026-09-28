@@ -12,18 +12,6 @@ from app.services import add_admin_audit
 from app.tg_webapp import require_webapp_user
 
 T = Path(__file__).resolve().parent / "templates"
-JS_PATH = T / "mini.js"
-JS_CORE = T / "mini-core.js"
-JS_UI = T / "mini-ui.js"
-JS_CARD_API = T / "mini-card-api.js"
-JS_CONFIRM = T / "mini-confirm.js"
-JS_ONBOARD = T / "mini-onboard.js"
-JS_PENDING = T / "mini-pending.js"
-JS_OPS = T / "mini-ops.js"
-JS_ROLES = T / "mini-roles.js"
-JS_RECONCILE = T / "mini-reconcile.js"
-JS_INVOICE = T / "mini-invoice.js"
-JS_COUPON_FIX = T / "mini-coupon-fix.js"
 
 
 def _admin(body=None, user_id: int = 0, init_data: str = "") -> int:
@@ -41,21 +29,12 @@ def _js(path: Path, name: str):
 
 
 def mount_card_admin(app) -> None:
-    app.add_api_route("/mini.js", _js(JS_PATH, "mini.js"), methods=["GET"])
-    app.add_api_route("/mini-core.js", _js(JS_CORE, "mini-core.js"), methods=["GET"])
-    app.add_api_route("/mini-ui.js", _js(JS_UI, "mini-ui.js"), methods=["GET"])
-    app.add_api_route("/mini-card-api.js", _js(JS_CARD_API, "mini-card-api.js"), methods=["GET"])
-    for i in range(4):
-        p = T / f"mini-ui.p{i}.js"
-        app.add_api_route(f"/mini-ui.p{i}.js", _js(p, f"mini-ui.p{i}.js"), methods=["GET"])
-    app.add_api_route("/mini-confirm.js", _js(JS_CONFIRM, "mini-confirm.js"), methods=["GET"])
-    app.add_api_route("/mini-onboard.js", _js(JS_ONBOARD, "mini-onboard.js"), methods=["GET"])
-    app.add_api_route("/mini-pending.js", _js(JS_PENDING, "mini-pending.js"), methods=["GET"])
-    app.add_api_route("/mini-ops.js", _js(JS_OPS, "mini-ops.js"), methods=["GET"])
-    app.add_api_route("/mini-roles.js", _js(JS_ROLES, "mini-roles.js"), methods=["GET"])
-    app.add_api_route("/mini-reconcile.js", _js(JS_RECONCILE, "mini-reconcile.js"), methods=["GET"])
-    app.add_api_route("/mini-invoice.js", _js(JS_INVOICE, "mini-invoice.js"), methods=["GET"])
-    app.add_api_route("/mini-coupon-fix.js", _js(JS_COUPON_FIX, "mini-coupon-fix.js"), methods=["GET"])
+    mounted = set()
+    for path in sorted(T.glob("mini*.js")):
+        if path.name in mounted:
+            continue
+        mounted.add(path.name)
+        app.add_api_route(f"/{path.name}", _js(path, path.name), methods=["GET"])
 
     @app.get("/api/mini/admin/card")
     async def get_card(user_id: int = 0, init_data: str = ""):
