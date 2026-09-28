@@ -3,13 +3,14 @@ from __future__ import annotations
 from fastapi import Request
 from fastapi.responses import JSONResponse
 
-from app.coupons import redeem_coupon
+from app.coupons import redeem_coupon, widen_coupon_tg_id
 from app.db import get_session
 from app.services import get_or_create_tenant
 from app.tg_webapp import require_webapp_user
 
 
 def remount_redeem(app) -> None:
+    widen_coupon_tg_id()
     kept = []
     for route in list(app.router.routes):
         path = getattr(route, "path", None)
