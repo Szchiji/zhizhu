@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import secrets
 from datetime import datetime, timedelta
-from math import floor
 
 from fastapi import Request
 from fastapi.responses import JSONResponse
@@ -22,8 +21,8 @@ class Coupon(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     code: Mapped[str] = mapped_column(String(32), unique=True, index=True)
-    kind: Mapped[str] = mapped_column(String(16), default="days")  # days | percent
-    value_days: Mapped[int] = mapped_column(Integer, default=0)  # days gift OR percent off 1-90
+    kind: Mapped[str] = mapped_column(String(16), default="days")
+    value_days: Mapped[int] = mapped_column(Integer, default=0)
     max_redemptions: Mapped[int | None] = mapped_column(Integer, nullable=True)
     redeemed_count: Mapped[int] = mapped_column(Integer, default=0)
     expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
@@ -59,14 +58,14 @@ def find_coupon(db: Session, code: str) -> Coupon | None:
     return db.scalar(select(Coupon).where(Coupon.code == raw))
 
 
-def coupon_error(db: Session, coupon: Coupon | None, *, tenant_id: int | None = None) -> str:
+def coupon_error(db: Session, coupon: Coupon | None, *, tenant_id: int | None = None, ignore_prior: bool = False) -> str:
     if not coupon:
         return "兑换码无效"
     if coupon.expires_at and coupon.expires_at < utcnow():
         return "兑换码已过期"
     if coupon.max_redemptions is not None and coupon.redeemed_count >= coupon.max_redemptions:
         return "兑换码已兑完"
-    if tenant_id:
+    if tenant_id and not ignore_prior:
         prior = db.scalar(
             select(CouponRedemption).where(
                 CouponRedemption.coupon_id == coupon.id,
@@ -141,14 +140,14 @@ def mount_wave3(app) -> None:
             return JSONResponse({"error": "未登录"}, status_code=401)
         db = get_session()
         try:
-            tenant = get_or_create_tenant(db, uid)
             coupon = find_coupon(db, code)
-            err = coupon_error(db, coupon, tenant_id=tenant.id)
+            if not coupon:
+                return JSONResponse({"error": "兑换码无效"}, status_code=400)
+            kind = (coupon.kind or "days").strip().lower()
+            err = coupon_error(db, coupon, ignore_prior=(kind in {"percent", "discount"}))
             if err:
                 return JSONResponse({"error": err}, status_code=400)
-            assert coupon is not None
-            kind = (coupon.kind or "days").strip().lower()
-            if kind == "percent":
+            if kind in {"percent", "discount"}:
                 pct = max(1, min(90, int(coupon.value_days or 0)))
                 return {"ok": True, "kind": "percent", "percent_off": pct, "message": f"本单 {pct}% 优惠"}
             return {
