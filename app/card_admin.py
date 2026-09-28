@@ -23,6 +23,7 @@ JS_OPS = T / "mini-ops.js"
 JS_ROLES = T / "mini-roles.js"
 JS_RECONCILE = T / "mini-reconcile.js"
 JS_INVOICE = T / "mini-invoice.js"
+JS_COUPON_FIX = T / "mini-coupon-fix.js"
 
 
 def _admin(body=None, user_id: int = 0, init_data: str = "") -> int:
@@ -54,6 +55,7 @@ def mount_card_admin(app) -> None:
     app.add_api_route("/mini-roles.js", _js(JS_ROLES, "mini-roles.js"), methods=["GET"])
     app.add_api_route("/mini-reconcile.js", _js(JS_RECONCILE, "mini-reconcile.js"), methods=["GET"])
     app.add_api_route("/mini-invoice.js", _js(JS_INVOICE, "mini-invoice.js"), methods=["GET"])
+    app.add_api_route("/mini-coupon-fix.js", _js(JS_COUPON_FIX, "mini-coupon-fix.js"), methods=["GET"])
 
     @app.get("/api/mini/admin/card")
     async def get_card(user_id: int = 0, init_data: str = ""):
