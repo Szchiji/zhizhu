@@ -51,15 +51,29 @@ async def notify_admins_activation(bot, tenant, order, *, paid_label: str = "", 
             await bot.send_message(chat_id=admin_id, text=text)
         except Exception as exc:
             log.warning("admin activation notify failed admin=%s: %s", admin_id, exc)
-    # Wave5: one-shot profile onboarding DM to the payer
     try:
         from app.db import get_session
+        from app.referral import grant_referral
         from app.wave5_onboarding import maybe_send_onboarding_dm
 
         db = get_session()
         try:
+            days = grant_referral(db, tenant)
+            if days and bot and getattr(tenant, "owner_tg_id", None):
+                raw = None
+                try:
+                    from app.services import get_setting
+
+                    raw = get_setting(db, f"invitee:{int(tenant.owner_tg_id)}")
+                    if raw:
+                        await bot.send_message(
+                            chat_id=int(raw),
+                            text=f"邀请奖励：好友已开通，你获得 {days} 天",
+                        )
+                except Exception:
+                    pass
             await maybe_send_onboarding_dm(bot, db, tenant)
         finally:
             db.close()
     except Exception as exc:  # noqa: BLE001
-        log.warning("onboarding dm hook failed: %s", exc)
+        log.warning("onboarding/referral hook failed: %s", exc)
