@@ -37,18 +37,22 @@ def _drop_open_orders(db, tenant_id: int) -> None:
         db.commit()
 
 
-def _invoice_url(result) -> str:
-    if isinstance(result, dict):
-        result = result.get("url") or result.get("invoice_url") or result.get("invoice") or ""
-    url = str(result or "").strip()
-    match = _SLUG_RE.search(url)
-    if match:
-        return "https://t.me/$" + match.group(1)
-    if url.startswith("$"):
-        return "https://t.me/" + url
-    if url.startswith("https://t.me/"):
-        return url.split("?", 1)[0].rstrip("/")
-    return url
+def _safe_payload(key: str, tenant_id: int) -> str:
+    raw_key = re.sub(r"[^A-Za-z0-9]", "", str(key or "year"))[:16] or "year"
+    code = re.sub(r"[^A-Za-z0-9]", "", new_code())[:16]
+    return f"s{raw_key}_{int(tenant_id)}_{code}"[:128]
+
+
+async def _tg_json(method: str, payload: dict) -> dict:
+    async with httpx.AsyncClient(timeout=20) as client:
+        r = await client.post(
+            f"https://api.telegram.org/bot{PLATFORM_BOT_TOKEN}/{method}",
+            json=payload,
+        )
+        try:
+            return r.json()
+        except Exception:
+            return {"ok": False, "description": f"telegram {method} {r.status_code}"}
 
 
 def remount_mini_order(app) -> None:
@@ -103,7 +107,7 @@ def remount_mini_order(app) -> None:
                 ),
             )
             _drop_open_orders(db, tenant.id)
-            label = str(meta.get("label") or key)[:24]
+            label = re.sub(r"[^A-Za-z0-9 ]+", "", str(meta.get("label") or key))[:24] or "Pass"
             if rail == "usdt":
                 addr = get_setting(db, "usdt_address", USDT_ADDRESS)
                 if not addr:
@@ -142,7 +146,7 @@ def remount_mini_order(app) -> None:
             price = int(plan_stars(db, key))
             if coupon_obj:
                 price = int(apply_percent(price, coupon_obj.value_days, stars=True))
-            payload = f"stars:{key}:{tenant.id}:{new_code()}"[:128]
+            payload = _safe_payload(key, tenant.id)
             db.add(
                 Order(
                     public_code=new_code(),
@@ -158,32 +162,39 @@ def remount_mini_order(app) -> None:
                 )
             )
             db.commit()
-            body_inv = {
-                "title": f"平台登记 {label}"[:32],
-                "description": "开通后可保存登记资料",
+            inv_body = {
+                "title": "HeYanHQ Pass",
+                "description": "Official membership",
                 "payload": payload,
                 "currency": "XTR",
-                "prices": [{"label": label, "amount": int(price)}],
+                "prices": [{"label": "Pass", "amount": int(price)}],
             }
-            async with httpx.AsyncClient(timeout=20) as client:
-                r = await client.post(
-                    f"https://api.telegram.org/bot{PLATFORM_BOT_TOKEN}/createInvoiceLink",
-                    json=body_inv,
-                )
-                data = r.json()
-            if not data.get("ok"):
-                return JSONResponse({"error": data.get("description", "无法创建 Stars 账单")}, status_code=400)
-            invoice = _invoice_url(data.get("result"))
-            alt = invoice.replace("https://t.me/$", "https://t.me/invoice/") if invoice.startswith("https://t.me/$") else invoice
-            if not invoice.startswith("https://t.me/"):
-                return JSONResponse({"error": "账单链接无效，请重试"}, status_code=400)
+            sent = await _tg_json("sendInvoice", {"chat_id": int(uid), **inv_body})
+            if sent.get("ok"):
+                if coupon_obj:
+                    mark_redeemed(db, coupon_obj, tenant_id=tenant.id, tg_id=uid, days=0)
+                    db.commit()
+                return {
+                    "ok": True,
+                    "sent": True,
+                    "payload": payload,
+                    "amount": int(price),
+                    "discount": int(coupon_obj.value_days) if coupon_obj else 0,
+                }
+            link = await _tg_json("createInvoiceLink", inv_body)
+            if not link.get("ok"):
+                err = sent.get("description") or link.get("description") or "无法创建 Stars 账单"
+                return JSONResponse({"error": f"Stars账单失败：{err}"}, status_code=400)
+            raw = str(link.get("result") or "")
+            match = _SLUG_RE.search(raw)
+            invoice = ("https://t.me/$" + match.group(1)) if match else raw
             if coupon_obj:
                 mark_redeemed(db, coupon_obj, tenant_id=tenant.id, tg_id=uid, days=0)
                 db.commit()
             return {
                 "ok": True,
+                "sent": False,
                 "invoice": invoice,
-                "invoice_alt": alt,
                 "payload": payload,
                 "amount": int(price),
                 "discount": int(coupon_obj.value_days) if coupon_obj else 0,
