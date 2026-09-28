@@ -28,8 +28,8 @@ def install_mini_html_middleware(app) -> None:
             if "mini-card-api.js" not in html and 'src="/mini-core.js' in html:
                 html = html.replace(
                     f'<script src="/mini-core.js?v={MINI_ASSET_VER}"></script>',
-                    f'<script src="/mini-card-api.js?v={MINI_ASSET_VER}"></script>'+
-                    f'<script src="/mini-core.js?v={MINI_ASSET_VER}"></script>',
+                    f'<script src="/mini-card-api.js?v={MINI_ASSET_VER}"></script>'
+                    + f'<script src="/mini-core.js?v={MINI_ASSET_VER}"></script>',
                     1,
                 )
             if "mini-ui.p0.js" not in html and 'src="/mini-ui.js' in html:
@@ -48,6 +48,7 @@ def install_mini_html_middleware(app) -> None:
                 "mini-onboard.js",
                 "mini-pending.js",
                 "mini-ops.js",
+                "mini-invoice.js",
                 "mini-roles.js",
                 "mini-reconcile.js",
                 "mini-fx.js",
