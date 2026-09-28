@@ -26,6 +26,33 @@
       return '';
     }
   }
+  function escapeHtml(s) {
+    return String(s || '')
+      .replace(/&/g, '&')
+      .replace(/</g, '<')
+      .replace(/>/g, '>');
+  }
+  function toHtml(raw) {
+    var t = String(raw || '');
+    if (!t) return '';
+    if (t.indexOf('<') === -1) return escapeHtml(t).replace(/\n/g, '<br>');
+    t = t.replace(/<(?!\/?\s*(?:b|strong|i|em|u|s|code|pre|blockquote|br|a|span)\b)[^>]*>/gi, '');
+    return t.replace(/\n/g, '<br>');
+  }
+  function toPlain(raw) {
+    return String(raw || '')
+      .replace(/<br\s*\/?>/gi, '\n')
+      .replace(/<\/blockquote>/gi, '\n')
+      .replace(/<\/p>/gi, '\n')
+      .replace(/<[^>]+>/g, '')
+      .replace(/&/g, '&')
+      .replace(/</g, '<')
+      .replace(/>/g, '>')
+      .replace(/"/g, '"')
+      .replace(/&#39;/g, "'")
+      .replace(/\n{3,}/g, '\n\n')
+      .trim();
+  }
   function ensure() {
     var me = el('tab-me');
     if (!me) return;
@@ -73,32 +100,35 @@
       }
     }
   }
-  function cardText() {
-    return ((el('mycard') || {}).textContent || '').trim();
+  function rawCard() {
+    return el('mycard') ? el('mycard').getAttribute('data-raw') || el('mycard').innerText || '' : '';
   }
   function shareCard() {
-    var text = cardText();
-    if (!text || text.indexOf('加载') === 0) {
+    var text = toPlain(rawCard());
+    if (!text) {
       box(false, '还没有可转发的卡');
       return;
     }
-    var url =
-      'https://t.me/share/url?url=' +
-      encodeURIComponent((el('invite-link') || {}).textContent || '') +
-      '&text=' +
-      encodeURIComponent(text.slice(0, 900));
+    var bot = ((el('invite-link') || {}).textContent || '').split('?')[0] || 'https://t.me';
+    var url = 'https://t.me/share/url?url=' + encodeURIComponent(bot) + '&text=' + encodeURIComponent(text.slice(0, 900));
     if (window.Telegram && Telegram.WebApp && Telegram.WebApp.openTelegramLink) {
       Telegram.WebApp.openTelegramLink(url);
     } else window.open(url, '_blank');
   }
   function copyCard() {
-    var text = cardText();
+    var text = toPlain(rawCard());
     if (!text) return;
     if (navigator.clipboard && navigator.clipboard.writeText) {
       navigator.clipboard.writeText(text).then(function () {
         box(true, '已复制登记卡');
       });
     }
+  }
+  function setCard(raw) {
+    var node = el('mycard');
+    if (!node) return;
+    node.setAttribute('data-raw', raw || '');
+    node.innerHTML = toHtml(raw || '暂无登记卡');
   }
   async function paint() {
     ensure();
@@ -125,12 +155,12 @@
         ).then(function (r) {
           return r.json();
         });
-        if (el('mycard')) el('mycard').textContent = j.card || me.card_text || '暂无登记卡';
-      } else if (el('mycard')) {
-        el('mycard').textContent = (me && me.card_text) || '请先设置电报用户名';
+        setCard(j.card || me.card_text || '');
+      } else {
+        setCard((me && me.card_text) || '请先设置电报用户名');
       }
     } catch (e) {
-      if (el('mycard')) el('mycard').textContent = '登记卡加载失败';
+      setCard('登记卡加载失败');
     }
     try {
       var r = await fetch('/api/mini/referral?init_data=' + encodeURIComponent(init)).then(function (x) {
