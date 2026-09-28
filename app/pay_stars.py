@@ -3,11 +3,12 @@ from __future__ import annotations
 from datetime import timedelta
 from types import SimpleNamespace
 
+import httpx
 from fastapi import Request
 from fastapi.responses import JSONResponse
-from telegram import LabeledPrice
 
 from app.access import get_bot
+from app.config import PLATFORM_BOT_TOKEN
 from app.coupons import apply_percent, find_coupon, mark_redeemed, widen_coupon_tg_id
 from app.db import get_session
 from app.models import Order, utcnow
@@ -15,6 +16,29 @@ from app.pay_redeem import remount_redeem
 from app.plans import ensure_plan_key, plan_info, plan_stars
 from app.services import get_or_create_tenant, new_code, save_paid_profile
 from app.tg_webapp import require_webapp_user, user_from_init
+
+
+async def _invoice_link(payload: str, price: int) -> str:
+    async with httpx.AsyncClient(timeout=20) as client:
+        r = await client.post(
+            f"https://api.telegram.org/bot{PLATFORM_BOT_TOKEN}/createInvoiceLink",
+            json={
+                "title": "HeYanHQ",
+                "description": "Official pass",
+                "payload": payload,
+                "currency": "XTR",
+                "prices": [{"label": "Pass", "amount": int(price)}],
+            },
+        )
+        data = r.json()
+    if not data.get("ok"):
+        raise RuntimeError(data.get("description") or "createInvoiceLink failed")
+    raw = str(data.get("result") or "")
+    if raw.startswith("$"):
+        raw = "https://t.me/" + raw
+    elif raw.startswith("t.me/"):
+        raw = "https://" + raw
+    return raw
 
 
 def remount_stars_pay(app) -> None:
@@ -28,8 +52,7 @@ def remount_stars_pay(app) -> None:
             uid = require_webapp_user(init_data=str(body.get("init_data") or ""), body=body)
             if not uid:
                 return JSONResponse({"error": "未登录"}, status_code=401)
-            bot = get_bot()
-            if bot is None:
+            if not PLATFORM_BOT_TOKEN:
                 return JSONResponse({"error": "机器人未就绪"}, status_code=503)
             db = get_session()
             try:
@@ -92,21 +115,10 @@ def remount_stars_pay(app) -> None:
                         db.rollback()
             finally:
                 db.close()
-            link = await bot.create_invoice_link(
-                title="HeYanHQ",
-                description="Official pass",
-                payload=payload,
-                currency="XTR",
-                prices=[LabeledPrice(label="Pass", amount=int(price))],
-            )
-            raw = str(link or "")
-            if raw.startswith("$") :
-                raw = "https://t.me/" + raw
-            elif raw.startswith("t.me/"):
-                raw = "https://" + raw
+            link = await _invoice_link(payload, price)
             return {
                 "ok": True,
-                "invoice": raw,
+                "invoice": link,
                 "payload": payload,
                 "amount": int(price),
                 "discount": percent_off,
