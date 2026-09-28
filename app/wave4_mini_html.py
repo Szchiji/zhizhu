@@ -25,12 +25,12 @@ var h=document.getElementById('pay-coupon-hint');
 if(h) h.textContent=t;
 }
 function code(){return ((document.getElementById('pay-coupon')||{}).value||'').trim();}
-function goMe(msg){
+window.goMe=function(msg){
 box(true,msg||'已开通');
 try{if(typeof loadMe==='function')loadMe();}catch(e){}
 try{if(typeof loadOrders==='function')loadOrders();}catch(e){}
 try{if(typeof tab==='function')tab('me');}catch(e){}
-}
+};
 function invoiceUrl(raw){
 var u=String(raw||'').trim();
 if(u.charAt(0)==='$') u='https://t.me/'+u;
@@ -80,7 +80,7 @@ var s=await postPay('/api/mini/pay-stars');
 var inv=invoiceUrl(s.invoice);
 if(!inv||!tg||!tg.openInvoice) throw new Error('当前客户端不能打开 Stars');
 tg.openInvoice(inv,function(st){
-if(st==='paid') goMe('支付成功，已开通');
+if(st==='paid') window.goMe('支付成功，已开通');
 else if(st==='cancelled') box(false,'已取消');
 else if(st==='failed') box(false,'支付失败');
 if(btn) btn.disabled=false;
@@ -151,6 +151,11 @@ def install_mini_html_middleware(app) -> None:
                     )
             if "__payBoot36=true" not in html:
                 html = html.replace("</body>", _PAY_BOOT, 1)
+            if "mini-success.js" not in html:
+                html = html.replace(
+                    "</body>",
+                    f'<script src="/mini-success.js?v={MINI_ASSET_VER}"></script></body>',
+                )
             return HTMLResponse(
                 html,
                 status_code=200,
