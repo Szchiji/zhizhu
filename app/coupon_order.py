@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from datetime import timedelta
 from types import SimpleNamespace
 
@@ -22,6 +23,8 @@ from app.services import (
 )
 from app.tg_webapp import require_webapp_user, user_from_init
 
+_SLUG_RE = re.compile(r"(?:\$|invoice/)([A-Za-z0-9\-_=]+)")
+
 
 def _drop_open_orders(db, tenant_id: int) -> None:
     from app.services import add_event, open_order
@@ -38,12 +41,13 @@ def _invoice_url(result) -> str:
     if isinstance(result, dict):
         result = result.get("url") or result.get("invoice_url") or result.get("invoice") or ""
     url = str(result or "").strip()
-    if url.startswith("http://"):
-        url = "https://" + url[7:]
+    match = _SLUG_RE.search(url)
+    if match:
+        return "https://t.me/$" + match.group(1)
     if url.startswith("$"):
-        url = "https://t.me/" + url
-    if url.startswith("t.me/"):
-        url = "https://" + url
+        return "https://t.me/" + url
+    if url.startswith("https://t.me/"):
+        return url.split("?", 1)[0].rstrip("/")
     return url
 
 
@@ -154,22 +158,23 @@ def remount_mini_order(app) -> None:
                 )
             )
             db.commit()
+            body_inv = {
+                "title": f"平台登记 {label}"[:32],
+                "description": "开通后可保存登记资料",
+                "payload": payload,
+                "currency": "XTR",
+                "prices": [{"label": label, "amount": int(price)}],
+            }
             async with httpx.AsyncClient(timeout=20) as client:
                 r = await client.post(
                     f"https://api.telegram.org/bot{PLATFORM_BOT_TOKEN}/createInvoiceLink",
-                    json={
-                        "title": f"平台登记 {label}"[:32],
-                        "description": "开通后可保存登记资料",
-                        "payload": payload,
-                        "provider_token": "",
-                        "currency": "XTR",
-                        "prices": [{"label": label, "amount": int(price)}],
-                    },
+                    json=body_inv,
                 )
                 data = r.json()
             if not data.get("ok"):
                 return JSONResponse({"error": data.get("description", "无法创建 Stars 账单")}, status_code=400)
             invoice = _invoice_url(data.get("result"))
+            alt = invoice.replace("https://t.me/$", "https://t.me/invoice/") if invoice.startswith("https://t.me/$") else invoice
             if not invoice.startswith("https://t.me/"):
                 return JSONResponse({"error": "账单链接无效，请重试"}, status_code=400)
             if coupon_obj:
@@ -178,6 +183,7 @@ def remount_mini_order(app) -> None:
             return {
                 "ok": True,
                 "invoice": invoice,
+                "invoice_alt": alt,
                 "payload": payload,
                 "amount": int(price),
                 "discount": int(coupon_obj.value_days) if coupon_obj else 0,
