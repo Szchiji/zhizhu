@@ -1,4 +1,4 @@
-/* wave7: coupons admin/redeem + order revoke UI */
+/* wave7: coupons admin/redeem + order revoke UI + percent coupons */
 (function () {
   function qAuth() {
     return (
@@ -28,6 +28,33 @@
     return j;
   }
 
+  function ensurePayCoupon() {
+    var pay = document.getElementById('tab-pay');
+    if (!pay || document.getElementById('pay-coupon')) return;
+    var card = pay.querySelector('.card');
+    if (!card) return;
+    var box = document.createElement('div');
+    box.innerHTML =
+      '<label>折扣码（可空）</label>' +
+      '<input id="pay-coupon" placeholder="优惠 X% 的折扣码" />' +
+      '<p class="hint">赠送天数码请到「我的」页兑换。折扣码在本页填好再点 Stars / USDT。</p>';
+    var btns = card.querySelector('.btns');
+    if (btns) card.insertBefore(box, btns);
+    else card.appendChild(box);
+  }
+
+  if (typeof api === 'function' && !window.__couponApiWrap) {
+    window.__couponApiWrap = true;
+    var _api = api;
+    window.api = function (path, body) {
+      if (path === '/api/mini/order') {
+        var code = ((document.getElementById('pay-coupon') || {}).value || '').trim();
+        if (code) body = Object.assign({}, body || {}, { coupon: code });
+      }
+      return _api(path, body);
+    };
+  }
+
   function ensureRedeemCard() {
     var host = document.getElementById('tab-me');
     if (!host || document.getElementById('coupon-redeem-card')) return;
@@ -36,6 +63,7 @@
     card.id = 'coupon-redeem-card';
     card.innerHTML =
       '<div class="kicker">Coupon</div><h1>兑换码</h1>' +
+      '<p class="sub">仅用于「赠送天数」码。折扣码请回开通页填写。</p>' +
       '<label>兑换码</label><input id="coupon-code" placeholder="如 CP-XXXXXX" />' +
       '<div class="btns"><button type="button" id="coupon-redeem-btn">兑换</button></div>';
     var ledger = document.getElementById('olist');
@@ -77,7 +105,13 @@
     sec.innerHTML =
       '<div class="card"><h2 class="sec">兑换码</h2>' +
       '<label>码（可空，空则自动生成）</label><input id="cp-code" placeholder="CP-XXXX" />' +
-      '<label>赠送天数</label><input id="cp-days" type="number" value="7" />' +
+      '<label>类型</label><select id="cp-kind">' +
+      '<option value="days">赠送天数</option>' +
+      '<option value="percent">折扣百分比（优惠 X%）</option>' +
+      '</select>' +
+      '<label id="cp-val-lab">赠送天数</label>' +
+      '<input id="cp-days" type="number" value="7" />' +
+      '<p class="hint">折扣填 1–90，例如 20 表示本单减 20%。折扣码要在开通页使用；赠送天数码在「我的」页兑换。</p>' +
       '<label>最大兑换次数（可空=不限）</label><input id="cp-max" type="number" placeholder="不限" />' +
       '<label>备注</label><input id="cp-note" placeholder="活动说明" />' +
       '<div class="btns"><button type="button" id="cp-save">保存兑换码</button>' +
@@ -88,6 +122,11 @@
     else host.appendChild(sec);
     document.getElementById('cp-save').onclick = saveCoupon;
     document.getElementById('cp-refresh').onclick = loadCoupons;
+    var kind = document.getElementById('cp-kind');
+    kind.onchange = function () {
+      document.getElementById('cp-val-lab').textContent =
+        kind.value === 'percent' ? '优惠百分比 1-90' : '赠送天数';
+    };
   }
 
   async function loadCoupons() {
@@ -109,12 +148,13 @@
       el.innerHTML = rows
         .map(function (c) {
           var max = c.max_redemptions == null ? '∞' : c.max_redemptions;
+          var kind = (c.kind || 'days') === 'percent' ? '折扣 ' + (c.value_days || 0) + '%' : (c.value_days || 0) + '天';
           return (
             '<div><b>' +
             (c.code || '') +
             '</b> · ' +
-            (c.value_days || 0) +
-            '天 · 已兑 ' +
+            kind +
+            ' · 已兑 ' +
             (c.redeemed_count || 0) +
             '/' +
             max +
@@ -130,15 +170,17 @@
 
   async function saveCoupon() {
     try {
+      var kind = (document.getElementById('cp-kind').value || 'days');
       var body = {
         code: (document.getElementById('cp-code').value || '').trim(),
-        value_days: Number(document.getElementById('cp-days').value || 7),
+        kind: kind,
+        value_days: Number(document.getElementById('cp-days').value || (kind === 'percent' ? 10 : 7)),
         note: (document.getElementById('cp-note').value || '').trim(),
       };
       var max = (document.getElementById('cp-max').value || '').trim();
       if (max !== '') body.max_redemptions = Number(max);
       var j = await postJson('/api/mini/admin/coupons', body);
-      show(ok, '已保存 ' + (j.code || ''));
+      show(ok, '已保存 ' + (j.code || '') + (kind === 'percent' ? ' · 折扣码' : ' · 赠天码'));
       if (j.code) document.getElementById('cp-code').value = j.code;
       loadCoupons();
     } catch (e) {
@@ -168,22 +210,14 @@
     }
     var yes = true;
     if (typeof confirmAct === 'function') {
-      yes = await confirmAct(
-        '撤销开通',
-        '撤销 ' + code + ' 将回退会员天数（不调用 Stars 官方退款），确认？'
-      );
+      yes = await confirmAct('撤销开通', '撤销 ' + code + ' 将回退会员天数（不调用 Stars 官方退款），确认？');
     } else {
       yes = window.confirm('撤销 ' + code + '？');
     }
     if (!yes) return;
     try {
       var j = await postJson('/api/mini/admin/revoke', { code: code });
-      show(
-        ok,
-        '已撤销 ' +
-          (j.code || code) +
-          (j.paid_until ? ' · 到期 ' + j.paid_until : '')
-      );
+      show(ok, '已撤销 ' + (j.code || code) + (j.paid_until ? ' · 到期 ' + j.paid_until : ''));
       if (typeof searchOrders === 'function') searchOrders();
     } catch (e) {
       show(err, e.message);
@@ -203,6 +237,7 @@
     var _tab = tab;
     window.tab = function (name) {
       _tab.apply(this, arguments);
+      if (name === 'pay') ensurePayCoupon();
       if (name === 'me') ensureRedeemCard();
       if (name === 'adm') {
         ensureCouponsAdmin();
@@ -212,6 +247,7 @@
   }
 
   function boot() {
+    ensurePayCoupon();
     ensureRedeemCard();
     ensureCouponsAdmin();
     ensureRevokeBtn();
