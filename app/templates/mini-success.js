@@ -10,6 +10,22 @@
       a.textContent = String(msg || '');
     }
   }
+  function tgUser() {
+    if (typeof user !== 'undefined' && user) return user;
+    try {
+      return (window.Telegram && Telegram.WebApp && Telegram.WebApp.initDataUnsafe && Telegram.WebApp.initDataUnsafe.user) || null;
+    } catch (e) {
+      return null;
+    }
+  }
+  function data() {
+    if (typeof initData !== 'undefined' && initData) return initData;
+    try {
+      return (window.Telegram && Telegram.WebApp && Telegram.WebApp.initData) || '';
+    } catch (e) {
+      return '';
+    }
+  }
   function ensure() {
     var me = el('tab-me');
     if (!me) return;
@@ -20,7 +36,7 @@
       card.innerHTML =
         '<div class="kicker">Official Card</div>' +
         '<h1>我的登记卡</h1>' +
-        '<div class="idcard" id="mycard">开通后在此显示</div>' +
+        '<div class="idcard" id="mycard">加载中…</div>' +
         '<div class="btns">' +
         '<button type="button" id="btn-share-card">转发到群</button>' +
         '<button type="button" class="ghost" id="btn-copy-card">复制卡面</button>' +
@@ -62,17 +78,18 @@
   }
   function shareCard() {
     var text = cardText();
-    if (!text || text === '开通后在此显示') {
+    if (!text || text.indexOf('加载') === 0) {
       box(false, '还没有可转发的卡');
       return;
     }
     var url =
       'https://t.me/share/url?url=' +
-      encodeURIComponent('https://t.me/' + ((window._botName || '') + '').replace(/^@/, '')) +
+      encodeURIComponent((el('invite-link') || {}).textContent || '') +
       '&text=' +
       encodeURIComponent(text.slice(0, 900));
-    if (window.tg && tg.openTelegramLink) tg.openTelegramLink(url);
-    else window.open(url, '_blank');
+    if (window.Telegram && Telegram.WebApp && Telegram.WebApp.openTelegramLink) {
+      Telegram.WebApp.openTelegramLink(url);
+    } else window.open(url, '_blank');
   }
   function copyCard() {
     var text = cardText();
@@ -85,25 +102,38 @@
   }
   async function paint() {
     ensure();
-    if (!window.user) return;
-    var name = user.username || '';
-    if (name && el('mycard')) {
-      try {
-        var q =
+    var u = tgUser();
+    var init = data();
+    try {
+      var me = await fetch(
+        '/api/mini/me?init_data=' +
+          encodeURIComponent(init) +
+          '&username=' +
+          encodeURIComponent((u && u.username) || '') +
+          '&display_name=' +
+          encodeURIComponent((u && ((u.first_name || '') + ' ' + (u.last_name || '')).trim()) || '')
+      ).then(function (r) {
+        return r.json();
+      });
+      var uname = (me && me.username) || (u && u.username) || '';
+      if (uname) {
+        var j = await fetch(
           '/api/mini/lookup?q=' +
-          encodeURIComponent('@' + name) +
-          '&init_data=' +
-          encodeURIComponent(typeof initData !== 'undefined' ? initData : '');
-        var j = await fetch(q).then(function (r) {
+            encodeURIComponent('@' + uname) +
+            '&init_data=' +
+            encodeURIComponent(init)
+        ).then(function (r) {
           return r.json();
         });
-        el('mycard').textContent = j.card || j.note || '暂无登记卡';
-      } catch (e) {}
+        if (el('mycard')) el('mycard').textContent = j.card || me.card_text || '暂无登记卡';
+      } else if (el('mycard')) {
+        el('mycard').textContent = (me && me.card_text) || '请先设置电报用户名';
+      }
+    } catch (e) {
+      if (el('mycard')) el('mycard').textContent = '登记卡加载失败';
     }
     try {
-      var r = await fetch(
-        '/api/mini/referral?init_data=' + encodeURIComponent(typeof initData !== 'undefined' ? initData : '')
-      ).then(function (x) {
+      var r = await fetch('/api/mini/referral?init_data=' + encodeURIComponent(init)).then(function (x) {
         return x.json();
       });
       if (el('invite-link')) el('invite-link').textContent = r.link || '暂无邀请链接';
@@ -112,7 +142,9 @@
           ? '好友从此链接进来并开通，你获得 ' + r.days + ' 天'
           : '邀请暂未开启';
       }
-    } catch (e) {}
+    } catch (e) {
+      if (el('invite-link')) el('invite-link').textContent = '邀请链接加载失败';
+    }
   }
   var _loadMe = window.loadMe;
   window.loadMe = async function () {
@@ -126,5 +158,6 @@
     paint();
   };
   ensure();
-  setTimeout(paint, 600);
+  setTimeout(paint, 400);
+  setTimeout(paint, 1200);
 })();
