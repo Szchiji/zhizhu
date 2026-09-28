@@ -28,31 +28,48 @@
     return j;
   }
 
+  function couponCode() {
+    return ((document.getElementById('pay-coupon') || {}).value || '').trim();
+  }
+
+  function wrapPayHooks() {
+    if (typeof api === 'function' && !window.__couponApiWrap) {
+      window.__couponApiWrap = true;
+      var _api = api;
+      window.api = function (path, body) {
+        if (path === '/api/mini/order') {
+          var code = couponCode();
+          if (code) body = Object.assign({}, body || {}, { coupon: code });
+        }
+        return _api(path, body);
+      };
+    }
+    if (typeof pay === 'function' && !window.__couponPayWrap) {
+      window.__couponPayWrap = true;
+      var _pay = pay;
+      window.pay = function (btn, rail) {
+        return _pay(btn, rail);
+      };
+    }
+  }
+
   function ensurePayCoupon() {
-    var pay = document.getElementById('tab-pay');
-    if (!pay || document.getElementById('pay-coupon')) return;
-    var card = pay.querySelector('.card');
+    var payTab = document.getElementById('tab-pay');
+    if (!payTab || document.getElementById('pay-coupon')) {
+      wrapPayHooks();
+      return;
+    }
+    var card = payTab.querySelector('.card');
     if (!card) return;
     var box = document.createElement('div');
     box.innerHTML =
       '<label>折扣码（可空）</label>' +
       '<input id="pay-coupon" placeholder="优惠 X% 的折扣码" />' +
-      '<p class="hint">赠送天数码请到「我的」页兑换。折扣码在本页填好再点 Stars / USDT。</p>';
+      '<p class="hint" id="pay-coupon-hint">赠送天数码请到「我的」页兑换。折扣码在本页填好再点 Stars / USDT。</p>';
     var btns = card.querySelector('.btns');
     if (btns) card.insertBefore(box, btns);
     else card.appendChild(box);
-  }
-
-  if (typeof api === 'function' && !window.__couponApiWrap) {
-    window.__couponApiWrap = true;
-    var _api = api;
-    window.api = function (path, body) {
-      if (path === '/api/mini/order') {
-        var code = ((document.getElementById('pay-coupon') || {}).value || '').trim();
-        if (code) body = Object.assign({}, body || {}, { coupon: code });
-      }
-      return _api(path, body);
-    };
+    wrapPayHooks();
   }
 
   function ensureRedeemCard() {
@@ -170,7 +187,7 @@
 
   async function saveCoupon() {
     try {
-      var kind = (document.getElementById('cp-kind').value || 'days');
+      var kind = document.getElementById('cp-kind').value || 'days';
       var body = {
         code: (document.getElementById('cp-code').value || '').trim(),
         kind: kind,
@@ -237,6 +254,7 @@
     var _tab = tab;
     window.tab = function (name) {
       _tab.apply(this, arguments);
+      wrapPayHooks();
       if (name === 'pay') ensurePayCoupon();
       if (name === 'me') ensureRedeemCard();
       if (name === 'adm') {
@@ -251,6 +269,9 @@
     ensureRedeemCard();
     ensureCouponsAdmin();
     ensureRevokeBtn();
+    wrapPayHooks();
+    setTimeout(wrapPayHooks, 400);
+    setTimeout(wrapPayHooks, 1200);
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
   else setTimeout(boot, 0);
