@@ -109,7 +109,13 @@ async def lifespan(app: FastAPI):
             url=url,
             secret_token=WEBHOOK_SECRET,
             drop_pending_updates=False,
-            allowed_updates=["message", "callback_query", "inline_query", "pre_checkout_query", "purchased_paid_media"],
+            allowed_updates=[
+                "message",
+                "callback_query",
+                "inline_query",
+                "pre_checkout_query",
+                "purchased_paid_media",
+            ],
         )
         log.info("platform webhook %s", url)
     mini = f"{(PUBLIC_BASE_URL or WEBHOOK_BASE_URL or '').rstrip('/')}/mini?v=4"
@@ -271,6 +277,8 @@ exec(compile(_rest.read_text(encoding="utf-8"), str(_rest), "exec"), globals())
 
 from app.coupon_order import remount_mini_order
 from app.pay_usdt import remount_usdt_pay
+from app.pay_stars import remount_stars_pay
 
 remount_mini_order(app)
 remount_usdt_pay(app)
+remount_stars_pay(app)
