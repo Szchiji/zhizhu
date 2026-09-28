@@ -14,6 +14,7 @@ from app.models import Order, utcnow
 from app.pay_redeem import remount_redeem
 from app.plans import ensure_plan_key, plan_info, plan_stars
 from app.referral import remount_referral
+from app.renew_job import start_renew_job
 from app.services import get_or_create_tenant, new_code, save_paid_profile
 from app.tg_webapp import require_webapp_user, user_from_init
 
@@ -45,6 +46,7 @@ def remount_stars_pay(app) -> None:
     widen_coupon_tg_id()
     remount_redeem(app)
     remount_referral(app)
+    start_renew_job()
 
     @app.post("/api/mini/pay-stars")
     async def pay_stars(request: Request):
