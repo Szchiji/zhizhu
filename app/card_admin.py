@@ -22,10 +22,10 @@ JS_PENDING = T / "mini-pending.js"
 JS_OPS = T / "mini-ops.js"
 JS_ROLES = T / "mini-roles.js"
 JS_RECONCILE = T / "mini-reconcile.js"
+JS_INVOICE = T / "mini-invoice.js"
 
 
 def _admin(body=None, user_id: int = 0, init_data: str = "") -> int:
-    """Admin identity from verified WebApp init_data only, then ADMIN_TG_IDS check."""
     del user_id
     uid = require_webapp_user(init_data=init_data, body=body)
     return uid if uid in ADMIN_TG_IDS else 0
@@ -53,6 +53,7 @@ def mount_card_admin(app) -> None:
     app.add_api_route("/mini-ops.js", _js(JS_OPS, "mini-ops.js"), methods=["GET"])
     app.add_api_route("/mini-roles.js", _js(JS_ROLES, "mini-roles.js"), methods=["GET"])
     app.add_api_route("/mini-reconcile.js", _js(JS_RECONCILE, "mini-reconcile.js"), methods=["GET"])
+    app.add_api_route("/mini-invoice.js", _js(JS_INVOICE, "mini-invoice.js"), methods=["GET"])
 
     @app.get("/api/mini/admin/card")
     async def get_card(user_id: int = 0, init_data: str = ""):
