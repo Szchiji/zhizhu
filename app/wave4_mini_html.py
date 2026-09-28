@@ -12,12 +12,12 @@ from app.wave_card_wysiwyg import patch_mini_html
 log = logging.getLogger("zhizhu.wave4_mini")
 
 _PAY_BOOT = r"""<script>
-window.__payBoot32=true;
+window.__payBoot33=true;
 window.__couponPayWrap=true;
 (function(){
 function box(ok,msg){
 var t=String(msg||'');
-if(/expected pattern/i.test(t)) t=ok?'下单已提交':'USDT 下单失败，请清空折扣码再试';
+if(/expected pattern/i.test(t)) t='请使用 USDT，折扣码异常时先清空再试';
 var a=document.getElementById(ok?'ok':'err');
 if(a){a.style.display='block';a.textContent=t;}
 var b=document.getElementById(ok?'err':'ok');
@@ -41,7 +41,8 @@ if(document.getElementById('oamt')) document.getElementById('oamt').textContent=
 if(document.getElementById('ochain')) document.getElementById('ochain').textContent=(u.chain||'TRC20').toUpperCase();
 if(document.getElementById('oaddr')) document.getElementById('oaddr').textContent=u.address||'';
 window._addr=u.address||'';
-box(true,'请转账 '+(u.amount||'')+' USDT，订单 '+(u.code||''));
+var extra=u.discount?('已打 '+u.discount+'% 折、'):'';
+box(true,extra+'请转账 '+(u.amount||'')+' USDT，订单 '+(u.code||''));
 }
 function lockStars(){
 var btns=document.querySelectorAll('#tab-pay button');
@@ -64,9 +65,7 @@ if(rail==='stars'){box(false,'请点绿色 USDT');return;}
 if(!user){box(false,'请从机器人打开');return;}
 if(btn) btn.disabled=true;
 try{
-var u;
-try{u=await postUsdt(code());}
-catch(e1){u=await postUsdt('');}
+var u=await postUsdt(code());
 showUsdt(u);
 }catch(e){box(false,(e&&e.message)||'USDT 下单失败');}
 if(btn) btn.disabled=false;
@@ -74,8 +73,6 @@ if(btn) btn.disabled=false;
 lockStars();
 setTimeout(lockStars,300);
 setTimeout(lockStars,1000);
-var err=document.getElementById('err');
-if(err&&/expected pattern/i.test(err.textContent||'')) err.style.display='none';
 })();
 </script></body>"""
 
@@ -132,7 +129,7 @@ def install_mini_html_middleware(app) -> None:
                         "</body>",
                         f'<script src="/{name}?v={MINI_ASSET_VER}"></script></body>',
                     )
-            if "__payBoot32=true" not in html:
+            if "__payBoot33=true" not in html:
                 html = html.replace("</body>", _PAY_BOOT, 1)
             return HTMLResponse(
                 html,
