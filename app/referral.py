@@ -71,15 +71,8 @@ def grant_referral(db: Session, tenant) -> int:
     return days
 
 
-def invite_link(db: Session, tg_id: int) -> str:
-    bot = (bot_username(db) if callable(bot_username) else "") or ""
-    try:
-        from app.brand import bot_username as brand_bot
-
-        bot = brand_bot()
-    except Exception:
-        bot = ""
-    bot = str(bot or "").lstrip("@")
+def invite_link(tg_id: int) -> str:
+    bot = (bot_username() or "").lstrip("@")
     if not bot:
         return ""
     return f"https://t.me/{bot}?start=ref{int(tg_id)}"
@@ -93,12 +86,7 @@ def remount_referral(app) -> None:
             return JSONResponse({"error": "未登录"}, status_code=401)
         db = get_session()
         try:
-            return {
-                "ok": True,
-                "on": ref_on(db),
-                "days": ref_days(db),
-                "link": invite_link(db, uid),
-            }
+            return {"ok": True, "on": ref_on(db), "days": ref_days(db), "link": invite_link(uid)}
         finally:
             db.close()
 
