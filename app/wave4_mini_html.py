@@ -12,7 +12,7 @@ from app.wave_card_wysiwyg import patch_mini_html
 log = logging.getLogger("zhizhu.wave4_mini")
 
 _PAY_BOOT = r"""<script>
-window.__payBoot35=true;
+window.__payBoot36=true;
 window.__couponPayWrap=true;
 (function(){
 function box(ok,msg){
@@ -30,6 +30,12 @@ box(true,msg||'已开通');
 try{if(typeof loadMe==='function')loadMe();}catch(e){}
 try{if(typeof loadOrders==='function')loadOrders();}catch(e){}
 try{if(typeof tab==='function')tab('me');}catch(e){}
+}
+function invoiceUrl(raw){
+var u=String(raw||'').trim();
+if(u.charAt(0)==='$') u='https://t.me/'+u;
+if(u.indexOf('t.me/')===0) u='https://'+u;
+return u;
 }
 async function postPay(path, extra){
 var body=Object.assign({init_data:typeof initData!=='undefined'?initData:'',plan:_planId||'year',coupon:code()},extra||{});
@@ -64,22 +70,6 @@ b.onclick=function(ev){if(ev)ev.preventDefault();window.pay(b,'stars');};
 b.onclick=function(ev){if(ev)ev.preventDefault();window.pay(b,'usdt');};
 }
 }
-var inp=document.getElementById('pay-coupon');
-if(inp&&!inp.__bound){inp.__bound=true;inp.addEventListener('change',function(){});}
-var rb=document.getElementById('coupon-redeem-btn');
-if(rb&&!rb.__bound){
-rb.__bound=true;
-rb.onclick=async function(){
-var raw=((document.getElementById('coupon-code')||{}).value||'').trim();
-if(!raw){box(false,'请输入兑换码');return;}
-try{
-var r=await fetch('/api/mini/coupon/redeem',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({init_data:typeof initData!=='undefined'?initData:'',code:raw})});
-var j=await r.json();
-if(!r.ok||j.error) throw new Error(j.error||'兑换失败');
-goMe(j.message||('已兑换 '+(j.days||'')+'天'));
-}catch(e){box(false,e.message||'兑换失败');}
-};
-}
 }
 window.pay=async function(btn,rail){
 if(!user){box(false,'请从机器人打开');return;}
@@ -87,11 +77,17 @@ if(btn) btn.disabled=true;
 try{
 if(rail==='stars'){
 var s=await postPay('/api/mini/pay-stars');
-box(true,'折后 '+(s.amount||'')+'星，账单已发到机器人，付款后会进「我的」');
-try{if(tg&&tg.close)setTimeout(function(){tg.close();},800);}catch(e){}
-}else{
-showUsdt(await postPay('/api/mini/pay-usdt'));
+var inv=invoiceUrl(s.invoice);
+if(!inv||!tg||!tg.openInvoice) throw new Error('当前客户端不能打开 Stars');
+tg.openInvoice(inv,function(st){
+if(st==='paid') goMe('支付成功，已开通');
+else if(st==='cancelled') box(false,'已取消');
+else if(st==='failed') box(false,'支付失败');
+if(btn) btn.disabled=false;
+});
+return;
 }
+showUsdt(await postPay('/api/mini/pay-usdt'));
 }catch(e){box(false,(e&&e.message)||'下单失败');}
 if(btn) btn.disabled=false;
 };
@@ -153,7 +149,7 @@ def install_mini_html_middleware(app) -> None:
                         "</body>",
                         f'<script src="/{name}?v={MINI_ASSET_VER}"></script></body>',
                     )
-            if "__payBoot35=true" not in html:
+            if "__payBoot36=true" not in html:
                 html = html.replace("</body>", _PAY_BOOT, 1)
             return HTMLResponse(
                 html,
