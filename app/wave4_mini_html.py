@@ -49,6 +49,7 @@ def install_mini_html_middleware(app) -> None:
                 "mini-pending.js",
                 "mini-ops.js",
                 "mini-invoice.js",
+                "mini-coupon-fix.js",
                 "mini-roles.js",
                 "mini-reconcile.js",
                 "mini-fx.js",
