@@ -11,12 +11,15 @@ from app.access import get_bot
 from app.coupons import apply_percent, find_coupon, mark_redeemed
 from app.db import get_session
 from app.models import Order, utcnow
+from app.pay_redeem import remount_redeem
 from app.plans import ensure_plan_key, plan_info, plan_stars
 from app.services import get_or_create_tenant, new_code, save_paid_profile
 from app.tg_webapp import require_webapp_user, user_from_init
 
 
 def remount_stars_pay(app) -> None:
+    remount_redeem(app)
+
     @app.post("/api/mini/pay-stars")
     async def pay_stars(request: Request):
         try:
