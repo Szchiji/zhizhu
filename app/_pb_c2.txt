@@ -12,6 +12,13 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             return
         tenant = get_or_create_tenant(db, user.id)
         payload = (context.args[0] if context.args else '').strip()
+        if payload.lower().startswith('ref'):
+            try:
+                from app.referral import bind_referrer
+
+                bind_referrer(db, invitee_tg=user.id, payload=payload)
+            except Exception:
+                pass
         if payload.startswith('q') and parse_username(payload[1:]):
             await _send_lookup(update.effective_message, db, parse_username(payload[1:]), _bot(context), bot=context.bot, user=user)
             return
