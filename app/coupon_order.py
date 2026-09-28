@@ -34,8 +34,20 @@ def _drop_open_orders(db, tenant_id: int) -> None:
         db.commit()
 
 
+def _invoice_url(result) -> str:
+    if isinstance(result, dict):
+        result = result.get("url") or result.get("invoice_url") or result.get("invoice") or ""
+    url = str(result or "").strip()
+    if url.startswith("http://"):
+        url = "https://" + url[7:]
+    if url.startswith("$"):
+        url = "https://t.me/" + url
+    if url.startswith("t.me/"):
+        url = "https://" + url
+    return url
+
+
 def remount_mini_order(app) -> None:
-    """Replace /api/mini/order so percent coupons change the billed amount."""
     kept = []
     for route in list(app.router.routes):
         path = getattr(route, "path", None)
@@ -70,7 +82,8 @@ def remount_mini_order(app) -> None:
                 err = coupon_error(db, coupon_obj, tenant_id=tenant.id)
                 if err:
                     return JSONResponse({"error": err}, status_code=400)
-                if (coupon_obj.kind or "days").strip().lower() != "percent":
+                kind = (coupon_obj.kind or "days").strip().lower()
+                if kind not in {"percent", "discount"}:
                     return JSONResponse(
                         {"error": "赠送天数码请到「我的」页兑换，开通页只用折扣码"},
                         status_code=400,
@@ -86,6 +99,7 @@ def remount_mini_order(app) -> None:
                 ),
             )
             _drop_open_orders(db, tenant.id)
+            label = str(meta.get("label") or key)[:24]
             if rail == "usdt":
                 addr = get_setting(db, "usdt_address", USDT_ADDRESS)
                 if not addr:
@@ -121,10 +135,10 @@ def remount_mini_order(app) -> None:
                     "chain": USDT_CHAIN,
                     "discount": int(coupon_obj.value_days) if coupon_obj else 0,
                 }
-            price = plan_stars(db, key)
+            price = int(plan_stars(db, key))
             if coupon_obj:
                 price = int(apply_percent(price, coupon_obj.value_days, stars=True))
-            payload = f"stars:{key}:{tenant.id}:{new_code()}"
+            payload = f"stars:{key}:{tenant.id}:{new_code()}"[:128]
             db.add(
                 Order(
                     public_code=new_code(),
@@ -139,27 +153,31 @@ def remount_mini_order(app) -> None:
                     expires_at=utcnow() + timedelta(hours=24),
                 )
             )
-            if coupon_obj:
-                mark_redeemed(db, coupon_obj, tenant_id=tenant.id, tg_id=uid, days=0)
             db.commit()
             async with httpx.AsyncClient(timeout=20) as client:
                 r = await client.post(
                     f"https://api.telegram.org/bot{PLATFORM_BOT_TOKEN}/createInvoiceLink",
                     json={
-                        "title": f"平台登记·{meta['label']}",
-                        "description": "开通后可保存平台登记资料",
+                        "title": f"平台登记 {label}"[:32],
+                        "description": "开通后可保存登记资料",
                         "payload": payload,
                         "provider_token": "",
                         "currency": "XTR",
-                        "prices": [{"label": meta["label"], "amount": int(price)}],
+                        "prices": [{"label": label, "amount": int(price)}],
                     },
                 )
                 data = r.json()
             if not data.get("ok"):
                 return JSONResponse({"error": data.get("description", "无法创建 Stars 账单")}, status_code=400)
+            invoice = _invoice_url(data.get("result"))
+            if not invoice.startswith("https://t.me/"):
+                return JSONResponse({"error": "账单链接无效，请重试"}, status_code=400)
+            if coupon_obj:
+                mark_redeemed(db, coupon_obj, tenant_id=tenant.id, tg_id=uid, days=0)
+                db.commit()
             return {
                 "ok": True,
-                "invoice": data["result"],
+                "invoice": invoice,
                 "payload": payload,
                 "amount": int(price),
                 "discount": int(coupon_obj.value_days) if coupon_obj else 0,
