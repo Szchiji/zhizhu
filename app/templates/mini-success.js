@@ -65,9 +65,10 @@
         '<h1>我的登记卡</h1>' +
         '<div class="idcard" id="mycard">加载中…</div>' +
         '<div class="btns">' +
-        '<button type="button" id="btn-share-card">转发到群</button>' +
+        '<button type="button" id="btn-share-card">发到群</button>' +
         '<button type="button" class="ghost" id="btn-copy-card">复制卡面</button>' +
-        '</div>';
+        '</div>' +
+        '<p class="hint">发到群会由机器人出官方卡，带格式和按钮</p>';
       var first = me.querySelector('.card');
       if (first && first.nextSibling) me.insertBefore(card, first.nextSibling);
       else me.insertBefore(card, me.firstChild);
@@ -104,16 +105,13 @@
     return el('mycard') ? el('mycard').getAttribute('data-raw') || el('mycard').innerText || '' : '';
   }
   function shareCard() {
-    var text = toPlain(rawCard());
-    if (!text) {
-      box(false, '还没有可转发的卡');
+    var name = ((el('mycard') && el('mycard').getAttribute('data-user')) || '').replace(/^@/, '');
+    var wa = window.Telegram && Telegram.WebApp;
+    if (name && wa && typeof wa.switchInlineQuery === 'function') {
+      wa.switchInlineQuery(name);
       return;
     }
-    var bot = ((el('invite-link') || {}).textContent || '').split('?')[0] || 'https://t.me';
-    var url = 'https://t.me/share/url?url=' + encodeURIComponent(bot) + '&text=' + encodeURIComponent(text.slice(0, 900));
-    if (window.Telegram && Telegram.WebApp && Telegram.WebApp.openTelegramLink) {
-      Telegram.WebApp.openTelegramLink(url);
-    } else window.open(url, '_blank');
+    box(false, '请在群里输入 @机器人 加空格 加 @' + (name || '用户名'));
   }
   function copyCard() {
     var text = toPlain(rawCard());
@@ -124,10 +122,11 @@
       });
     }
   }
-  function setCard(raw) {
+  function setCard(raw, uname) {
     var node = el('mycard');
     if (!node) return;
     node.setAttribute('data-raw', raw || '');
+    if (uname) node.setAttribute('data-user', String(uname).replace(/^@/, ''));
     node.innerHTML = toHtml(raw || '暂无登记卡');
   }
   async function paint() {
@@ -155,12 +154,12 @@
         ).then(function (r) {
           return r.json();
         });
-        setCard(j.card || me.card_text || '');
+        setCard(j.card || me.card_text || '', uname);
       } else {
-        setCard((me && me.card_text) || '请先设置电报用户名');
+        setCard((me && me.card_text) || '请先设置电报用户名', '');
       }
     } catch (e) {
-      setCard('登记卡加载失败');
+      setCard('登记卡加载失败', '');
     }
     try {
       var r = await fetch('/api/mini/referral?init_data=' + encodeURIComponent(init)).then(function (x) {
