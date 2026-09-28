@@ -7,7 +7,7 @@ from fastapi import Request
 from fastapi.responses import JSONResponse
 
 from app.config import USDT_ADDRESS, USDT_CHAIN
-from app.coupons import apply_percent, find_coupon
+from app.coupons import apply_percent, find_coupon, mark_redeemed
 from app.db import get_session
 from app.models import Order, utcnow
 from app.plans import ensure_plan_key, plan_info, plan_usdt
@@ -38,7 +38,7 @@ def remount_usdt_pay(app) -> None:
                     kind = (coupon_obj.kind or "days").strip().lower()
                     if kind not in {"percent", "discount"}:
                         return JSONResponse(
-                            {"error": "这是赠送天数码，请到「我的」页兑换；开通页请用折扣码"},
+                            {"error": "这是赠送天数码，请到「我的」页兑换"},
                             status_code=400,
                         )
                     percent_off = max(1, min(90, int(coupon_obj.value_days or 0)))
@@ -83,6 +83,11 @@ def remount_usdt_pay(app) -> None:
                         expires_at=utcnow() + timedelta(minutes=20),
                     )
                 )
+                if coupon_obj:
+                    try:
+                        mark_redeemed(db, coupon_obj, tenant_id=tenant.id, tg_id=uid, days=0)
+                    except Exception:
+                        pass
                 db.commit()
                 return {
                     "ok": True,
