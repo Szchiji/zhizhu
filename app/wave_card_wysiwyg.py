@@ -39,14 +39,17 @@ NEW_SUB = '占位符：{品牌} {机器人} {姓名} {账号} {ID} {正文} {查
 
 def patch_mini_html(html: str) -> str:
     """Inject WYSIWYG CSS, hide card textareas, update hints, load overlay JS."""
-    # Inline WYSIWYG already in mini.html + mini-ui.js (syncVisToTa) — skip overlay.
-    if 'id="ctpaid-vis"' in html or "syncVisToTa" in html:
-        return html
+    # Always load overlay as a safety net: if mini-ui inflate fails, overlay still
+    # mounts contenteditable + per-card emoji bars. Overlay is idempotent enough
+    # (remounts bars; ensureSurfaces reuses existing *-vis nodes).
     if "mini-card-wysiwyg.js" not in html:
         html = html.replace(
             "</body>",
             f'<script src="/mini-card-wysiwyg.js?v={MINI_ASSET_VER}"></script></body>',
         )
+    # Inline surfaces already present — skip CSS/hint rewrite only.
+    if 'id="ctpaid-vis"' in html:
+        return html
     if "textarea.tpl-src" not in html:
         html = html.replace("</style>", CSS + "</style>", 1)
     for tid in ("ctpaid", "ctunpaid", "ctissuer"):

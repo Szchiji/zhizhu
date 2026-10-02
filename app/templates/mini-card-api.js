@@ -1,19 +1,29 @@
 /* Sync card templates into hidden textareas AND visible editors. */
+function _paintVisSafe() {
+  if (typeof window.paintAllVisFromTa === 'function') {
+    try { window.paintAllVisFromTa(); return true; } catch (e) {}
+  }
+  return false;
+}
 function _fillVisFromTa() {
+  /* Prefer real WYSIWYG paint (innerHTML via tgHtmlToVis). Never textContent —
+     that shows raw <b>/<u> tags and looks like the old code editor. */
+  if (_paintVisSafe()) return;
   ['ctpaid', 'ctunpaid', 'ctissuer'].forEach(function (id) {
     var ta = document.getElementById(id);
     var vis = document.getElementById(id + '-vis');
     if (!ta || !vis) return;
     var v = ta.value || '';
-    if (vis.innerText.trim() === v.trim()) return;
-    vis.textContent = v;
+    /* Fallback: parse Telegram-ish HTML into the contenteditable. */
+    try {
+      vis.innerHTML = String(v).replace(/\n/g, '<br>');
+    } catch (e) {
+      vis.textContent = v;
+    }
   });
 }
 function _schedulePaint() {
   _fillVisFromTa();
-  if (typeof window.paintAllVisFromTa === 'function') {
-    try { window.paintAllVisFromTa(); } catch (e) {}
-  }
   [300, 800, 1600, 2800].forEach(function (ms) {
     setTimeout(_fillVisFromTa, ms);
   });
@@ -91,6 +101,9 @@ function previewTpl(id) {
   var box = document.getElementById('card-preview');
   var body = document.getElementById('card-preview-body');
   if (!src || !box || !body) return;
+  if (typeof window.syncVisToTa === 'function') {
+    try { window.syncVisToTa(id); } catch (e) {}
+  }
   box.classList.remove('hidden');
   body.textContent = src.value || '(空模板)';
 }

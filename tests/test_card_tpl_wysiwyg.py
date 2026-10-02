@@ -35,9 +35,14 @@ def _load_ui_source() -> str:
     return raw
 
 
+def _load_overlay_source() -> str:
+    z64 = (TPL / "mini-card-wysiwyg.js.z64").read_text(encoding="ascii").strip()
+    return zlib.decompress(base64.b64decode(z64)).decode("utf-8")
+
+
 def test_mini_asset_ver_wysiwyg():
     assert isinstance(MINI_ASSET_VER, int)
-    assert MINI_ASSET_VER >= 21
+    assert MINI_ASSET_VER >= 36
 
 
 def test_mini_ui_scoped_emobar_and_wysiwyg():
@@ -49,6 +54,8 @@ def test_mini_ui_scoped_emobar_and_wysiwyg():
     assert "已登记卡 · 自定义表情" in ui
     assert "未登记卡 · 自定义表情" in ui
     assert "出具方卡 · 自定义表情" in ui
+    assert "mountTgBars" in ui
+    assert "tgHtmlToVis" in ui or "tgToVis" in ui
 
 
 def test_mini_html_visual_editors():
@@ -73,3 +80,28 @@ def test_mini_ui_self_contained_no_cdn():
     ui = _load_ui_source()
     assert "syncVisToTa" in ui
     assert len(ui) > 5000
+
+
+def test_card_api_prefers_paint_not_textcontent_clobber():
+    api = (TPL / "mini-card-api.js").read_text(encoding="utf-8")
+    assert "paintAllVisFromTa" in api
+    assert "Prefer real WYSIWYG paint" in api
+    # Primary path must not dump raw HTML tags into the visual surface.
+    primary = api.split("Fallback")[0]
+    assert "vis.textContent = v" not in primary
+
+
+def test_overlay_always_injected_and_exports():
+    patcher = (ROOT / "app/wave_card_wysiwyg.py").read_text(encoding="utf-8")
+    assert "Always load overlay" in patcher
+    assert 'if \'id="ctpaid-vis"\' in html or "syncVisToTa" in html:\n        return html' not in patcher
+    # Script inject happens before the ctpaid-vis early return.
+    inject_at = patcher.find("mini-card-wysiwyg.js")
+    early_at = patcher.find('if \'id="ctpaid-vis"\' in html:')
+    assert inject_at > 0 and early_at > inject_at
+    ov = _load_overlay_source()
+    assert "syncVisToTa" in ov
+    assert "paintAllVisFromTa" in ov
+    assert "已登记卡 · 自定义表情" in ov
+    assert "未登记卡 · 自定义表情" in ov
+    assert "出具方卡 · 自定义表情" in ov
