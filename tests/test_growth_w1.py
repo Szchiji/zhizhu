@@ -184,7 +184,7 @@ def test_growth_assets_wired():
 
     from app.static_ver import MINI_ASSET_VER
 
-    assert MINI_ASSET_VER >= 37
+    assert MINI_ASSET_VER >= 38
     html_mw = Path("app/wave4_mini_html.py").read_text(encoding="utf-8")
     assert "mini-growth.js" in html_mw
     growth = Path("app/templates/mini-growth.js").read_text(encoding="utf-8")
@@ -192,3 +192,8 @@ def test_growth_assets_wired():
     assert "去开通" in growth
     assert "邀请好友得天数" in growth
     assert "好友送你" in growth or "gift-banner" in growth
+    assert "分享预览" in growth
+    assert "发送到聊天" in growth
+    assert "复制链接" in growth
+    assert "openShareSheet" in growth or "growth-sheet" in growth
+    assert "switchInlineQuery" in growth
