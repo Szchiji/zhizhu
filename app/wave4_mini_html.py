@@ -151,7 +151,7 @@ def install_mini_html_middleware(app) -> None:
                     )
             if "__payBoot36=true" not in html:
                 html = html.replace("</body>", _PAY_BOOT, 1)
-            for late in ("mini-success.js", "mini-ref-admin.js"):
+            for late in ("mini-success.js", "mini-ref-admin.js", "mini-growth.js"):
                 if late not in html:
                     html = html.replace(
                         "</body>",
