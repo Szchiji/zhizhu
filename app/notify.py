@@ -59,17 +59,23 @@ async def notify_admins_activation(bot, tenant, order, *, paid_label: str = "", 
         db = get_session()
         try:
             days = grant_referral(db, tenant)
-            if days and bot and getattr(tenant, "owner_tg_id", None):
-                raw = None
+            if bot and getattr(tenant, "owner_tg_id", None):
                 try:
+                    from app.referral import get_bind
                     from app.services import get_setting
 
-                    raw = get_setting(db, f"invitee:{int(tenant.owner_tg_id)}")
-                    if raw:
-                        await bot.send_message(
-                            chat_id=int(raw),
-                            text=f"邀请奖励：好友已开通，你获得 {days} 天",
-                        )
+                    bind = get_bind(db, int(tenant.owner_tg_id))
+                    inviter_tg = int(bind["inviter"]) if bind and bind.get("inviter") else 0
+                    if not inviter_tg:
+                        raw = get_setting(db, f"invitee:{int(tenant.owner_tg_id)}")
+                        if raw and str(raw).isdigit():
+                            inviter_tg = int(raw)
+                    if inviter_tg:
+                        if days:
+                            msg = f"🎁 你的好友已开通，+{days} 天已到账"
+                        else:
+                            msg = "好友已开通，邀请进度 +1"
+                        await bot.send_message(chat_id=inviter_tg, text=msg)
                 except Exception:
                     pass
             await maybe_send_onboarding_dm(bot, db, tenant)
