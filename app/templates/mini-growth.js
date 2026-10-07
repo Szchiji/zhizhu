@@ -98,7 +98,30 @@
       '.inv-st.wait{background:rgba(139,147,161,.15);color:var(--muted)}' +
       '.q-actions{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}' +
       '.q-actions button{flex:1;min-width:120px}' +
-      '.q-hint{font-size:11px;color:var(--muted);margin-top:10px;line-height:1.5}';
+      '.q-hint{font-size:11px;color:var(--muted);margin-top:10px;line-height:1.5}' +
+      '.g-mask{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:80;display:none}' +
+      '.g-mask.on{display:block}' +
+      '.g-sheet{position:fixed;left:0;right:0;bottom:0;max-width:480px;margin:0 auto;background:#12161d;border-top:1px solid var(--line);border-radius:22px 22px 0 0;padding:10px 16px calc(26px + env(safe-area-inset-bottom,0px));z-index:81;transform:translateY(110%);transition:transform .3s ease;box-shadow:0 -12px 40px rgba(0,0,0,.45)}' +
+      '.g-sheet.on{transform:none}' +
+      '.g-grab{width:40px;height:4px;border-radius:2px;background:#3a414c;margin:0 auto 12px}' +
+      '.g-sheet-hd{display:flex;align-items:center;margin-bottom:10px}' +
+      '.g-sheet-hd b{font-size:16px;color:var(--text)}' +
+      '.g-sheet-hd .g-x{margin-left:auto;color:var(--muted);cursor:pointer;font-size:18px;padding:4px 8px}' +
+      '.g-bubble{background:#1f2a38;border-radius:14px 14px 14px 4px;padding:12px;font-size:13px;line-height:1.7;max-width:92%;color:var(--text);white-space:pre-wrap;word-break:break-word}' +
+      '.g-bubble .g-lnk{color:#6ab3ff;word-break:break-all}' +
+      '.g-bubble .g-ib{margin-top:8px;background:rgba(106,179,255,.12);color:#6ab3ff;text-align:center;border-radius:8px;padding:8px;font-size:13px}' +
+      '.g-bubble .g-sub{color:var(--muted);font-size:11px}' +
+      '.g-send-label{font-size:12px;color:var(--muted);margin-top:12px}' +
+      '.g-chips{display:flex;gap:8px;margin:12px 0 4px;overflow-x:auto;-webkit-overflow-scrolling:touch}' +
+      '.g-chips>div{flex-shrink:0;text-align:center;font-size:11px;color:var(--muted);width:58px;cursor:pointer}' +
+      '.g-chips .g-av{width:46px;height:46px;border-radius:50%;margin:0 auto 4px;display:flex;align-items:center;justify-content:center;font-weight:700;color:#fff}' +
+      '.g-chips>div.sel .g-av{outline:2px solid var(--gold);outline-offset:2px}' +
+      '.g-sheet .g-btn{display:flex;align-items:center;justify-content:center;width:100%;border-radius:12px;padding:13px;font-size:15px;font-weight:600;cursor:pointer;border:1px solid var(--line);background:#171c26;color:var(--text);margin-top:10px}' +
+      '.g-sheet .g-btn.gold{background:linear-gradient(180deg,var(--gold2),var(--gold));color:#1a1405;border:none}' +
+      '.g-sheet .g-hint{display:flex;gap:6px;align-items:flex-start;font-size:11px;color:var(--muted);margin-top:10px;line-height:1.5}' +
+      '.g-sheet .g-hint i{font-style:normal;color:var(--gold)}' +
+      '.g-toast{position:fixed;left:50%;bottom:96px;transform:translateX(-50%) translateY(12px);background:#1b212b;border:1px solid var(--line);color:var(--text);padding:10px 16px;border-radius:12px;font-size:13px;z-index:90;opacity:0;pointer-events:none;transition:.25s;white-space:nowrap;max-width:90%}' +
+      '.g-toast.on{opacity:1;transform:translateX(-50%) translateY(0)}';
     document.head.appendChild(s);
   }
   window.__growth = window.__growth || { progress: null, banner: null, refCode: '' };
@@ -273,15 +296,38 @@
     }
   }
 
+  function growthToast(msg) {
+    ensureStyle();
+    var t = el('growth-toast');
+    if (!t) {
+      t = document.createElement('div');
+      t.id = 'growth-toast';
+      t.className = 'g-toast';
+      document.body.appendChild(t);
+    }
+    t.textContent = String(msg || '');
+    t.classList.add('on');
+    clearTimeout(window.__growthToastTimer);
+    window.__growthToastTimer = setTimeout(function () {
+      t.classList.remove('on');
+    }, 1600);
+  }
+
   function copyText(text, msg) {
     if (!text) return;
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(text).then(function () {
+    var done = function () {
+      growthToast(msg || '已复制');
+      try {
         box(true, msg || '已复制');
+      } catch (e) {}
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(done).catch(function () {
+        done();
       });
       return;
     }
-    box(true, msg || '已复制');
+    done();
   }
 
   function shareUrl(url, text) {
@@ -301,15 +347,169 @@
         return true;
       }
     } catch (e) {}
+    try {
+      if (url) {
+        window.open(
+          'https://t.me/share/url?url=' + encodeURIComponent(url) + '&text=' + encodeURIComponent(text || ''),
+          '_blank'
+        );
+        return true;
+      }
+    } catch (e) {}
     copyText(url || q, '链接已复制，可粘贴分享');
     return false;
+  }
+
+  function ensureSheet() {
+    ensureStyle();
+    if (el('growth-sheet')) return;
+    var mask = document.createElement('div');
+    mask.id = 'growth-mask';
+    mask.className = 'g-mask';
+    mask.onclick = function () {
+      closeShareSheet();
+    };
+    var sheet = document.createElement('div');
+    sheet.id = 'growth-sheet';
+    sheet.className = 'g-sheet';
+    sheet.innerHTML =
+      '<div class="g-grab"></div>' +
+      '<div class="g-sheet-hd"><b>分享预览</b><span class="g-x" id="growth-sheet-x">✕</span></div>' +
+      '<div class="g-bubble" id="growth-bub"></div>' +
+      '<div class="g-send-label">发送到 <span style="color:var(--muted);font-size:11px">（应用内无法点选会话，确认后打开 Telegram）</span></div>' +
+      '<div class="g-chips" id="growth-chips">' +
+      '<div class="sel" data-pseudo="1"><div class="g-av" style="background:#4b7bd4">交</div>交易群</div>' +
+      '<div data-pseudo="1"><div class="g-av" style="background:#c0533c">M</div>Mike_88</div>' +
+      '<div data-pseudo="1"><div class="g-av" style="background:#3c9c7a">币</div>币圈互助</div>' +
+      '<div data-pseudo="1"><div class="g-av" style="background:#6b5bd4">阿</div>阿泽</div>' +
+      '<div data-pseudo="1"><div class="g-av" style="background:#333;border:1px dashed #666">…</div>更多</div>' +
+      '</div>' +
+      '<button type="button" class="g-btn gold" id="growth-sheet-send">发送到聊天</button>' +
+      '<button type="button" class="g-btn" id="growth-sheet-copy">🔗 复制链接</button>' +
+      '<div class="g-hint"><i>ⓘ</i><span>卡片含品牌水印与查询时间；链接携带你的 ref，好友开通后计入邀请进度。</span></div>';
+    document.body.appendChild(mask);
+    document.body.appendChild(sheet);
+    el('growth-sheet-x').onclick = function () {
+      closeShareSheet();
+    };
+    el('growth-chips').querySelectorAll('[data-pseudo]').forEach(function (c) {
+      c.onclick = function () {
+        el('growth-chips').querySelectorAll('[data-pseudo]').forEach(function (x) {
+          x.classList.remove('sel');
+        });
+        c.classList.add('sel');
+      };
+    });
+    el('growth-sheet-send').onclick = function () {
+      var st = window.__growthShare || {};
+      closeShareSheet();
+      shareUrl(st.link || '', st.text || '');
+      growthToast('已打开 Telegram 分享');
+    };
+    el('growth-sheet-copy').onclick = function () {
+      var st = window.__growthShare || {};
+      copyText(st.link || '', '链接已复制');
+    };
+  }
+
+  function closeShareSheet() {
+    var m = el('growth-mask');
+    var s = el('growth-sheet');
+    if (m) m.classList.remove('on');
+    if (s) s.classList.remove('on');
+  }
+
+  function buildBubble(kind, link, text, q) {
+    var now = '';
+    try {
+      var d = new Date();
+      var p = function (n) {
+        return (n < 10 ? '0' : '') + n;
+      };
+      now =
+        d.getFullYear() +
+        '-' +
+        p(d.getMonth() + 1) +
+        '-' +
+        p(d.getDate()) +
+        ' ' +
+        p(d.getHours()) +
+        ':' +
+        p(d.getMinutes());
+    } catch (e) {
+      now = '';
+    }
+    var shortLink = link ? String(link).replace(/^https?:\/\//, '') : '';
+    var lnk = shortLink
+      ? '<br><span class="g-lnk">' + escapeHtml(shortLink) + '</span>'
+      : '';
+    var wm =
+      '<br><span class="g-sub">查询时间 ' +
+      escapeHtml(now) +
+      ' · 水印 HeYanHQ</span>';
+    var qq = escapeHtml(q || '');
+    if (kind === 'found') {
+      return (
+        '🛡️ <b>平台身份核验</b><br>────────────<br><u><b>此账号完成登记</b></u><br><b>查询：</b>' +
+        (qq || '—') +
+        wm +
+        lnk +
+        '<div class="g-ib">🔍 我也要查 / 去登记</div>'
+      );
+    }
+    if (kind === 'empty') {
+      return (
+        '🛡️ <b>平台身份查询</b><br>────────────<br>⚠️ <b>' +
+        (qq || '该账号') +
+        ' 尚未登记</b><br>本平台暂无法确认该账号身份。<br>👉 本人可点下方按钮登记，<b>好友送你体验</b>' +
+        wm +
+        lnk +
+        '<div class="g-ib">🎁 开通平台登记</div>'
+      );
+    }
+    var body = escapeHtml(text || '').replace(/\n/g, '<br>');
+    if (!body) {
+      body = '🎁 <b>好友送你体验</b><br>我在用身份核验防骗子仿冒。';
+    }
+    return body + lnk + '<div class="g-ib">🛡️ 打开小程序</div>';
+  }
+
+  function openShareSheet(opts) {
+    opts = opts || {};
+    ensureSheet();
+    window.__growthShare = {
+      kind: opts.kind || 'invite',
+      link: opts.link || '',
+      text: opts.text || '',
+      q: opts.q || '',
+    };
+    var bub = el('growth-bub');
+    if (bub) {
+      bub.innerHTML = buildBubble(opts.kind || 'invite', opts.link || '', opts.text || '', opts.q || '');
+    }
+    el('growth-mask').classList.add('on');
+    el('growth-sheet').classList.add('on');
   }
 
   function shareInvite(p) {
     var link = (p && (p.invite_link || p.link)) || '';
     var days = (p && (p.reward_days || p.days)) || 7;
-    var text = '🎁 好友送你 ' + days + ' 天体验\n我在用身份核验防骗子仿冒。通过我的链接开通，额外送 ' + days + ' 天';
-    shareUrl(link, text);
+    var text =
+      '🎁 好友送你 ' +
+      days +
+      ' 天体验\n我在用身份核验防骗子仿冒。通过我的链接开通，额外送 ' +
+      days +
+      ' 天';
+    function go(l) {
+      openShareSheet({ kind: 'invite', link: l || link, text: text });
+    }
+    if (!link) {
+      loadProgress().then(function (r) {
+        go((r && (r.invite_link || r.link)) || deepLink('invite'));
+      });
+      return;
+    }
+    go(link);
   }
 
   function deepLink(src) {
@@ -397,20 +597,22 @@
 
   function shareResult(found) {
     var src = found ? 'found' : 'empty';
-    var link = deepLink(src);
+    var kind = found ? 'found' : 'empty';
     var q = (el('q') && el('q').value) || '';
     var text = found
       ? '🛡️ 平台身份核验\n此账号完成登记\n查询：' + q + '\n打开核验 / 去登记'
       : '🛡️ 平台身份查询\n' + q + ' 尚未登记\n👉 本人可点链接登记，好友送你体验';
+    function go(link) {
+      openShareSheet({ kind: kind, link: link || '', text: text, q: q });
+    }
+    var link = deepLink(src);
     if (!link) {
-      // ensure progress loaded for code
       loadProgress().then(function () {
-        link = deepLink(src);
-        shareUrl(link, text);
+        go(deepLink(src));
       });
       return;
     }
-    shareUrl(link, text);
+    go(link);
   }
 
   // Wrap lookup fetch to capture found flag
